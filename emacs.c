@@ -138,6 +138,7 @@ static int	x_size_str(char *);
 static int	x_size(int);
 static void	x_zots(char *);
 static void	x_zotc(int);
+static void	x_zotcp(char *);
 static void	x_load_hist(char **);
 static int	x_search(char *, int, int);
 static int	x_match(char *, char *);
@@ -651,16 +652,17 @@ x_fword(void)
 static void
 x_goto(char *cp)
 {
-	if (cp < xbp || cp >= (xbp + x_displen)) {
+	x_lastcp();
+	if (cp < xbp || cp > xlp) {
 		/* we are heading off screen */
 		xcp = cp;
 		x_adjust();
 	} else if (cp < xcp) {		/* move back */
 		while (cp < xcp)
-			x_bs((unsigned char)*--xcp);
+			x_bs(*--xcp);
 	} else if (cp > xcp) {		/* move forward */
 		while (cp > xcp)
-			x_zotc((unsigned char)*xcp++);
+			x_zotcp(xcp++);
 	}
 }
 
@@ -679,7 +681,7 @@ x_size_str(char *cp)
 {
 	int size = 0;
 	while (*cp)
-		size += x_size(*cp++);
+		size += x_size((unsigned char)*cp++);
 	return size;
 }
 
@@ -707,7 +709,7 @@ x_zots(char *str)
 	}
 	x_lastcp();
 	while (*str && str < xlp && adj == x_adj_done)
-		x_zotc(*str++);
+		x_zotcp(str++);
 }
 
 static void
@@ -721,6 +723,39 @@ x_zotc(int c)
 		x_e_putc(UNCTRL(c));
 	} else
 		x_e_putc(c);
+}
+
+static void
+x_zotcp(char *p)
+{
+	unsigned char uc = (unsigned char)*p;
+
+	if (uc == '\t') {
+		/*  Kludge, tabs are always four spaces.  */
+		x_e_puts("    ");
+		return;
+	}
+	if (isu8cont(uc)) {
+		if (x_col <= xx_cols) {
+			x_putc(uc);
+		}
+		if (x_adj_ok && !isu8cont((unsigned char)p[1]) &&
+		    (x_col < 0 || x_col >= (xx_cols - 2)))
+			x_adjust();
+		return;
+	}
+	if (iscntrl(uc)) {
+		x_e_putc('^');
+		x_e_putc(UNCTRL(uc));
+	} else {
+		if (x_col < xx_cols) {
+			x_putc(uc);
+			x_col++;
+		}
+		if (x_adj_ok && !isu8cont((unsigned char)p[1]) &&
+		    (x_col < 0 || x_col >= (xx_cols - 2)))
+			x_adjust();
+	}
 }
 
 static int
@@ -1042,7 +1077,7 @@ x_clear_screen(int c)
 static void
 x_redraw(int limit)
 {
-	int	i, j, truncate = 0;
+	int	i, j, truncate = 0, dcols;
 	char	*cp;
 
 	x_adj_ok = 0;
@@ -1084,10 +1119,12 @@ x_redraw(int limit)
 	if (xbp != xbuf || xep > xlp)
 		limit = xx_cols;
 	if (limit >= 0) {
-		if (xep > xlp)
-			i = 0;			/* we fill the line */
-		else
-			i = limit - (xlp - xbp);
+		dcols = 0;
+		for (cp = xbp; cp < xlp; cp++)
+			dcols += x_size((unsigned char)*cp);
+		i = limit - dcols;
+		if (i < 0)
+			i = 0;
 
 		for (j = 0; j < i && x_col < (xx_cols - 2); j++)
 			x_e_putc(' ');
@@ -1144,8 +1181,8 @@ x_transpose(int c)
 		 */
 		x_bs(xcp[-1]);
 		x_bs(xcp[-2]);
-		x_zotc(xcp[-1]);
-		x_zotc(xcp[-2]);
+		x_zotcp(&xcp[-1]);
+		x_zotcp(&xcp[-2]);
 		tmp = xcp[-1];
 		xcp[-1] = xcp[-2];
 		xcp[-2] = tmp;
@@ -1154,8 +1191,8 @@ x_transpose(int c)
 		 * cursor, move cursor position along one.
 		 */
 		x_bs(xcp[-1]);
-		x_zotc(xcp[0]);
-		x_zotc(xcp[-1]);
+		x_zotcp(&xcp[0]);
+		x_zotcp(&xcp[-1]);
 		tmp = xcp[-1];
 		xcp[-1] = xcp[0];
 		xcp[0] = tmp;
@@ -1818,12 +1855,22 @@ do_complete(int flags,	/* XCF_{COMMAND,FILE,COMMAND_FILE} */
 static void
 x_adjust(void)
 {
+	char *cp;
+	int col;
+
 	x_adj_done++;			/* flag the fact that we were called. */
 	/*
 	 * we had a problem if the prompt length > xx_cols / 2
 	 */
-	if ((xbp = xcp - (x_displen / 2)) < xbuf)
-		xbp = xbuf;
+	col = x_displen / 2;
+	cp = xcp;
+	while (cp > xbuf && col > 0) {
+		cp--;
+		while (cp > xbuf && isu8cont(*cp))
+			cp--;
+		col -= x_size((unsigned char)*cp);
+	}
+	xbp = cp;
 	xlp_valid = false;
 	x_redraw(xx_cols);
 	x_flush();
@@ -2177,6 +2224,8 @@ x_lastcp(void)
 		for (i = 0, rcp = xbp; rcp < xep && i < x_displen; rcp++)
 			i += x_size((unsigned char)*rcp);
 		xlp = rcp;
+		while (xlp < xep && isu8cont(*xlp))
+			xlp++;
 	}
 	xlp_valid = true;
 	return (xlp);
