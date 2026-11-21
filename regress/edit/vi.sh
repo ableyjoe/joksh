@@ -67,6 +67,13 @@ testseq "ab\00330axy" " # ab\b\baxb\byb\b"
 testseq "ab\003302axy\0033" " # ab\b\baxb\byb\bxyb\b\b"
 testseq "ab\00330axy\0033." " # ab\b\baxb\byb\b\byxyb\b\b"
 
+# UTF-8 continuation bytes: The cursor stays inside the line after Esc,
+# $ and a.
+testseq "\0251\0033" " # \0251\b"
+testseq "\0251\0251\0033\$" " # \0251\0251\b"
+testseq "#\0303\0251\n#\0303\0033ab" " # #\0303\0251\r\r\n # #\0303\b\0303b"
+testseq "\0303\0251x\00330ay" " # \0303\0251x\b\b\0303\0251yx\b"
+
 # B: Move back big word.
 testseq "one 2.0\0033BD" " # one 2.0\b\b\b   \b\b\b\b"
 

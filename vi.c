@@ -718,7 +718,7 @@ vi_cmd(int argcnt, const char *cmd)
 	if (is_move(*cmd)) {
 		if ((cur = domove(argcnt, cmd, 0)) >= 0) {
 			if (cur == es->linelen && cur != 0)
-				while (isu8cont(es->cbuf[--cur]))
+				while (isu8cont(es->cbuf[--cur]) && cur > 0)
 					continue;
 			es->cursor = cur;
 		} else
@@ -783,7 +783,8 @@ vi_cmd(int argcnt, const char *cmd)
 		case 'a':
 			modified = 1; hnum = hlast;
 			if (es->linelen != 0)
-				while (isu8cont(es->cbuf[++es->cursor]))
+				while (++es->cursor < es->linelen &&
+				    isu8cont(es->cbuf[es->cursor]))
 					continue;
 			insert = INSERT;
 			break;
@@ -1328,7 +1329,7 @@ redo_insert(int count)
 		if (putbuf(ibuf, inslen, insert==REPLACE) != 0)
 			return -1;
 	if (es->cursor > 0)
-		while (isu8cont(es->cbuf[--es->cursor]))
+		while (isu8cont(es->cbuf[--es->cursor]) && es->cursor > 0)
 			continue;
 	insert = 0;
 	return 0;
