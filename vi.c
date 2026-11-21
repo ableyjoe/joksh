@@ -819,6 +819,7 @@ vi_cmd(int argcnt, const char *cmd)
 					return -1;
 				if (*cmd == 'c' &&
 				    (cmd[1]=='w' || cmd[1]=='W') &&
+				    es->cursor < es->linelen &&
 				    !isspace((unsigned char)es->cbuf[es->cursor])) {
 					while (isspace(
 					    (unsigned char)es->cbuf[--ncursor]))
