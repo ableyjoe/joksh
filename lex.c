@@ -1212,6 +1212,7 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 {
 	char strbuf[1024], tmpbuf[1024], *p, *str, nbuf[32], delimiter = '\0';
 	int len, c, n, totlen = 0, indelimit = 0, counting = 1, delimitthis;
+	int newline;
 	const char *cp = sp;
 	struct tm *tm;
 	time_t t;
@@ -1237,6 +1238,7 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 		}
 
 		if (*cp == '\\') {
+			newline = 0;
 			cp++;
 			if (!*cp)
 				break;
@@ -1305,6 +1307,7 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 				strbuf[0] = '\n';
 				strbuf[1] = '\0';
 				totlen = 0;	/* reset for prompt re-print */
+				newline = 1;
 				sp = cp + 1;
 				break;
 			case 'p':	/* '\' '$' $ or # */
@@ -1315,6 +1318,7 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 				strbuf[0] = '\r';
 				strbuf[1] = '\0';
 				totlen = 0;	/* reset for prompt re-print */
+				newline = 1;
 				sp = cp + 1;
 				break;
 			case 's':	/* '\' 's' basename $0 */
@@ -1458,7 +1462,7 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 			}
 			if (doprint)
 				shf_write(str, len, shl_out);
-			if (counting && !indelimit && !delimitthis)
+			if (counting && !indelimit && !delimitthis && !newline)
 				totlen += len;
 			continue;
 		} else if (*cp != '!')
@@ -1489,7 +1493,9 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 		else if (doprint) {
 			shf_putc(c, shl_out);
 		}
-		if (counting && !indelimit && !delimitthis)
+		/* Newlines and tabs are accounted for above. */
+		if (counting && !indelimit && !delimitthis &&
+		    c != '\n' && c != '\r' && c != '\t')
 			totlen++;
 	}
 	if (doprint)

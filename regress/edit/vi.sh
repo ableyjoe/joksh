@@ -289,3 +289,12 @@ testseq "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 # UTF-8 redraw at right edge
 testseq "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\0303\0266b\00330\0022" \
 	" # aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b                                      <\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\0303\0266b\b\baaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >\r # \r\r\n # aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >\r # "
+
+# The prompt width: A carriage return starts again from zero, and a tab
+# goes to the next tab stop.
+a66=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+PS1=$(echo 'xy\r # ')
+testseq "${a66}aaaaaaa" "xy\r # ${a66}aaaaaaa"
+PS1=$(echo 'x\t# ')
+testseq "$a66" "x\t# $a66"
+PS1=' # '
