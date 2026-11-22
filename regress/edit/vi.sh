@@ -109,6 +109,16 @@ testseq "hello\00332Flix\00332,ix" " # hello\b\b\bxllo\b\b\b\bxlxlo\b\b"
 
 # f: Find character forward.
 testseq "hello\003302flD" " # hello\b\b\b\b\bhel  \b\b\b"
+# A multi-byte character is matched whole, not by its first byte.
+testseq "a\0303\0251\0303\0274bc\00330f\0303\0274D" \
+	" # a\0303\0251\0303\0274bc\0010\0010\0010\0010\0010a\0303\0251    \0010\0010\0010\0010\0010"
+# So it is after c, d and y, of four bytes, and before t and T stop.
+testseq "a\0303\0251bc\0303\0251d\00330df\0303\0251" \
+	" # a\0303\0251bc\0303\0251d\b\r # bc\0303\0251d   \r # "
+testseq "a\0303\0251bc\00330dtb" " # a\0303\0251bc\b\b\b\bbc   \r # "
+testseq "a\0360\0237\0230\0200b\00330df\0360\0237\0230\0200" \
+	" # a\0360\0237\0230\0200b\b\b\bb     \r # "
+testseq "a\0303\0251bc\0033T\0303\0251x" " # a\0303\0251bc\b\bc \b\b"
 
 # h, ^H: Move left.
 # i: Insert.
@@ -189,6 +199,10 @@ testseq "abcd\00332h2rxiy" " # abcd\b\b\bxx\byxd\b\b"
 testseq "\0303\0266\0033ro" " # \0303\0266\bo \b\b"
 testseq "\0342\0202\0254\0033ro" " # \0342\0202\0254\bo  \b\b\b"
 testseq "\0303\0266\00332ro" " # \0303\0266\b\a"
+# Replace with a multi-byte character, not just its first byte.
+testseq "x\0033r\0303\0266" " # x\0010\0303\0266\0010"
+# A character cut short is an error.
+testseq "x\0033r\0360x" " # x\b\a"
 
 # S: Substitute whole line.
 testseq "oldst\0033Snew" " # oldst\b\b\b\b\b     \r # new"

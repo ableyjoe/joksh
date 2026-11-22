@@ -56,7 +56,8 @@ static void	restore_cbuf(void);
 static void	edit_reset(char *, size_t);
 static int	putbuf(const char *, int, int);
 static void	del_range(int, int);
-static int	findch(int, int, int, int);
+static int	findch(const char *, int, int, int, int);
+static int	vi_u8len(unsigned char);
 static int	forwword(int);
 static int	backword(int);
 static int	endword(int);
@@ -140,7 +141,7 @@ const unsigned char	classify[128] = {
 	    C_,     E_|U_,  0,      0,      M_|Z_,  0,      C_,     0
 };
 
-#define MAXVICMD	3
+#define MAXVICMD	6
 #define SRCHLEN		40
 
 #define INSERT		1
@@ -177,7 +178,8 @@ static int	srchlen;		/* number of bytes in search pattern */
 static char	ybuf[LINE];		/* yank buffer */
 static int	yanklen;		/* length of yank buffer */
 static int	fsavecmd = ' ';		/* last find command */
-static int	fsavech;		/* character to find */
+static char	fsavech[4];		/* character to find */
+static int	fsavechlen;		/* its length in bytes */
 static char	lastcmd[MAXVICMD];	/* last non-move command */
 static int	lastac;			/* argcnt for lastcmd */
 static int	lastsearch = ' ';	/* last search command */
@@ -274,6 +276,7 @@ vi_hook(int ch)
 {
 	static char	curcmd[MAXVICMD], locpat[SRCHLEN];
 	static int	cmdlen, argc1, argc2;
+	int		xc;
 
 	switch (state) {
 
@@ -379,12 +382,28 @@ vi_hook(int ch)
 		break;
 
 	case VXCH:
-		if (ch == CTRL('['))
+		if (ch == CTRL('[')) {
 			state = VNORMAL;
-		else {
-			curcmd[cmdlen++] = ch;
-			state = VCMD;
+			break;
 		}
+		/*
+		 * f, F, t, T and r act on a whole character, so gather the
+		 * continuation bytes of a multi-byte one before running the
+		 * command. The character follows the command, which may
+		 * itself follow c, d or y. One cut short by a byte that
+		 * cannot continue it is an error.
+		 */
+		xc = is_long(curcmd[0]) ? 1 : 2;
+		if (cmdlen > xc && !isu8cont(ch)) {
+			vi_error();
+			state = VNORMAL;
+			break;
+		}
+		curcmd[cmdlen++] = ch;
+		if (cmdlen < MAXVICMD &&
+		    cmdlen - xc < vi_u8len((unsigned char)curcmd[xc]))
+			break;
+		state = VCMD;
 		break;
 
 	case VSEARCH:
@@ -954,7 +973,8 @@ vi_cmd(int argcnt, const char *cmd)
 
 				del_range(es->cursor, cur);
 				while (argcnt-- > 0)
-					putbuf(&cmd[1], 1, 0);
+					putbuf(&cmd[1],
+					    vi_u8len((unsigned char)cmd[1]), 0);
 				while (es->cursor > 0)
 					if (!isu8cont(es->cbuf[--es->cursor]))
 						break;
@@ -1220,7 +1240,8 @@ domove(int argcnt, const char *cmd, int sub)
 	case 't':
 	case 'T':
 		fsavecmd = *cmd;
-		fsavech = cmd[1];
+		fsavechlen = vi_u8len((unsigned char)cmd[1]);
+		memcpy(fsavech, &cmd[1], fsavechlen);
 		/* drop through */
 
 	case ',':
@@ -1231,10 +1252,15 @@ domove(int argcnt, const char *cmd, int sub)
 		t = fsavecmd > 'a';
 		if (*cmd == ',')
 			t = !t;
-		if ((ncursor = findch(fsavech, argcnt, t, i)) < 0)
+		if ((ncursor = findch(fsavech, fsavechlen, argcnt, t, i)) < 0)
 			return -1;
-		if (sub && t)
-			ncursor++;
+		/* Forward, c, d and y take in the whole character. */
+		if (sub && t) {
+			do {
+				ncursor++;
+			} while (ncursor < es->linelen &&
+			    isu8cont(es->cbuf[ncursor]));
+		}
 		break;
 
 	case 'h':
@@ -1528,7 +1554,7 @@ del_range(int a, int b)
 }
 
 static int
-findch(int ch, int cnt, int forw, int incl)
+findch(const char *str, int len, int cnt, int forw, int incl)
 {
 	int	ncursor;
 
@@ -1544,13 +1570,16 @@ findch(int ch, int cnt, int forw, int incl)
 				if (--ncursor < 0)
 					return -1;
 			}
-		} while (es->cbuf[ncursor] != ch);
+		} while (ncursor + len > es->linelen ||
+		    memcmp(&es->cbuf[ncursor], str, len) != 0);
 	}
+	/* Stop on the whole character before or after the one found. */
 	if (!incl) {
-		if (forw)
-			ncursor--;
-		else
-			ncursor++;
+		if (forw) {
+			while (--ncursor > 0 && isu8cont(es->cbuf[ncursor]))
+				;
+		} else
+			ncursor += len;
 	}
 	return ncursor;
 }
@@ -2343,6 +2372,21 @@ static int
 isu8cont(unsigned char c)
 {
 	return !Flag(FVISHOW8) && (c & (0x80 | 0x40)) == 0x80;
+}
+
+/* Number of bytes in the UTF-8 character that begins with c. */
+static int
+vi_u8len(unsigned char c)
+{
+	if (Flag(FVISHOW8))
+		return 1;
+	if ((c & 0xf8) == 0xf0 && c < 0xf5)	/* within Unicode */
+		return 4;
+	if ((c & 0xf0) == 0xe0)
+		return 3;
+	if ((c & 0xe0) == 0xc0 && c > 0xc1)	/* not an overlong form */
+		return 2;
+	return 1;
 }
 
 static void
