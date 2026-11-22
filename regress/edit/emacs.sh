@@ -353,6 +353,9 @@ testseq "echo\0033\0035e" " # echo\0010\0010\0010\0010"
 testseq "echo\0033\0035a" " # echo\0007"
 testseq "eecho\00332\0033\0035e" " # eecho\0010\0010\0010\0010\0010"
 testseq "echo\00332\0033\0035e" " # echo\0007"
+testseq "z\0303\0251y\0033\0035\0303\0251" " # z\0303\0251y\0010\0010"
+testseq "a\0303\0251b\0303\0274c\0033\0035\0303\0251" \
+	" # a\0303\0251b\0303\0274c\0010\0010\0010\0010"
 
 # [n] ^]: search-character-forward
 testseq "\0035a" " # \0007"
@@ -361,6 +364,9 @@ testseq "echo\0001\0035a" " # echo\0010\0010\0010\0010\0007"
 testseq "echoo\0001\00332\0035o" " # echoo\0010\0010\0010\0010\0010echo"
 # XXX differs from search-character-backward, should ring bell
 testseq "echo\0001\00332\0035o" " # echo\0010\0010\0010\0010ech"
+testseq "z\0303\0251y\0001\0035\0303\0251" " # z\0303\0251y\0010\0010\0010z"
+testseq "a\0303\0251b\0303\0274c\0001\0035\0303\0274" \
+	" # a\0303\0251b\0303\0274c\0010\0010\0010\0010\0010a\0303\0251b"
 
 # ^R: search-history
 testseq "\0022" " # \r\nI-search: "

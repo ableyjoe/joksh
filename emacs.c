@@ -197,6 +197,7 @@ static int	x_prev_com(int);
 static int	x_prev_histword(int);
 static int	x_search_char_forw(int);
 static int	x_search_char_back(int);
+static char	*x_u8chr(char *, const char *, int);
 static int	x_search_hist(int);
 static int	x_set_mark(int);
 static int	x_transpose(int);
@@ -792,17 +793,27 @@ x_mv_forw(int c)
 	return KSTD;
 }
 
+/* Find the n-byte character c, a string, in s. */
+static char *
+x_u8chr(char *s, const char *c, int n)
+{
+	return n == 1 ? strchr(s, *c) : strstr(s, c);
+}
+
 static int
 x_search_char_forw(int c)
 {
-	char *cp = xcp;
+	char *cp = xcp, u8[5];
+	int n;
 
 	*xep = '\0';
-	c = x_e_getc();
+	if ((n = x_e_getu8(u8, 0)) < 0) {
+		x_e_putc(BEL);
+		return KSTD;
+	}
 	while (x_arg--) {
-		if (c < 0 ||
-		    ((cp = (cp == xep) ? NULL : strchr(cp + 1, c)) == NULL &&
-		    (cp = strchr(xbuf, c)) == NULL)) {
+		if ((cp = (cp == xep) ? NULL : x_u8chr(cp + 1, u8, n)) == NULL &&
+		    (cp = x_u8chr(xbuf, u8, n)) == NULL) {
 			x_e_putc(BEL);
 			return KSTD;
 		}
@@ -814,18 +825,23 @@ x_search_char_forw(int c)
 static int
 x_search_char_back(int c)
 {
-	char *cp = xcp, *p;
+	char *cp = xcp, *p, u8[5];
+	int n;
 
-	c = x_e_getc();
+	if ((n = x_e_getu8(u8, 0)) < 0) {
+		x_e_putc(BEL);
+		return KSTD;
+	}
 	for (; x_arg--; cp = p)
 		for (p = cp; ; ) {
 			if (p-- == xbuf)
 				p = xep;
-			if (c < 0 || p == cp) {
+			if (p == cp) {
 				x_e_putc(BEL);
 				return KSTD;
 			}
-			if (*p == c)
+			if (*p == *u8 && (n == 1 ||
+			    (xep - p >= n && memcmp(p, u8, n) == 0)))
 				break;
 		}
 	x_goto(cp);
