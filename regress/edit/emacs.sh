@@ -252,6 +252,10 @@ testseq ": 1\n: 2\n\0033[A\0033[A\0033[B" \
 	" # : 1\r\r\n # : 2\r\r\n # \r # : 2 \0010\r # : 1 \0010\r # : 2 \0010"
 testseq ": 1\n: 2\n\0033OA\0033OA\0033OB" \
 	" # : 1\r\r\n # : 2\r\r\n # \r # : 2 \0010\r # : 1 \0010\r # : 2 \0010"
+# A history line loaded over a longer edit line must clear the mark,
+# or exchange-point-and-mark leaves the cursor past the end.
+testseq ": x\n0123456789\0033 \0020\0030\0030-" \
+	" # : x\r\r\n # 0123456789\r # : x        \0010\0010\0010\0010\0010\0010\0010\0010\0007-"
 
 # [n] ^[L, ^[l: downcase-word
 testseq "\0033L\0033l" " # \0007\0007"

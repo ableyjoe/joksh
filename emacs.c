@@ -905,6 +905,7 @@ x_load_hist(char **hp)
 	xbp = xbuf;
 	xep = xcp = xbuf + strlen(xbuf);
 	xlp_valid = false;
+	xmp = NULL;
 	if (xep <= x_lastcp())
 		x_redraw(oldsize);
 	x_goto(xep);
