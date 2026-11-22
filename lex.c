@@ -87,6 +87,8 @@ static void	gethere(void);
 static Lex_state *push_state_(State_info *, Lex_state *);
 static Lex_state *pop_state_(State_info *, Lex_state *);
 static char	*special_prompt_expand(char *);
+static int	isu8cont(unsigned char);
+static int	u8cols(const char *, int);
 static int	dopprompt(const char *, int, const char **, int);
 int		promptlen(const char *cp, const char **spp);
 
@@ -1208,6 +1210,29 @@ set_prompt(int to)
 }
 
 static int
+isu8cont(unsigned char c)
+{
+	return (c & (0x80 | 0x40)) == 0x80;
+}
+
+/* Columns taken by the len bytes at s: UTF-8 continuation bytes take none. */
+static int
+u8cols(const char *s, int len)
+{
+	int cols = 0;
+
+	while (len-- > 0)
+		if (!isu8cont(*s++))
+			cols++;
+	return cols;
+}
+
+/*
+ * Print the prompt, or only measure it, in columns. ntruncate is the
+ * number of columns to leave out at the start; a character goes as a
+ * whole, its last byte using up its column.
+ */
+static int
 dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 {
 	char strbuf[1024], tmpbuf[1024], *p, *str, nbuf[32], delimiter = '\0';
@@ -1452,18 +1477,22 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 			str = strbuf;
 			len = strlen(str);
 			if (ntruncate) {
-				if (ntruncate >= len) {
-					ntruncate -= len;
+				n = u8cols(str, len);
+				if (ntruncate >= n) {
+					ntruncate -= n;
 					continue;
 				}
-				str += ntruncate;
-				len -= ntruncate;
-				ntruncate = 0;
+				while (ntruncate > 0) {
+					if (len == 1 || !isu8cont(str[1]))
+						ntruncate--;
+					str++;
+					len--;
+				}
 			}
 			if (doprint)
 				shf_write(str, len, shl_out);
 			if (counting && !indelimit && !delimitthis && !newline)
-				totlen += len;
+				totlen += u8cols(str, len);
 			continue;
 		} else if (*cp != '!')
 			c = *cp++;
@@ -1488,14 +1517,15 @@ dopprompt(const char *sp, int ntruncate, const char **spp, int doprint)
 				totlen += len;
 			continue;
 		}
-		if (counting && ntruncate)
-			--ntruncate;
-		else if (doprint) {
+		if (counting && ntruncate) {
+			if (!isu8cont(*cp))
+				--ntruncate;
+		} else if (doprint) {
 			shf_putc(c, shl_out);
 		}
 		/* Newlines and tabs are accounted for above. */
 		if (counting && !indelimit && !delimitthis &&
-		    c != '\n' && c != '\r' && c != '\t')
+		    c != '\n' && c != '\r' && c != '\t' && !isu8cont(c))
 			totlen++;
 	}
 	if (doprint)

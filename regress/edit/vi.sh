@@ -304,4 +304,10 @@ PS1=$(echo 'xy\r # ')
 testseq "${a66}aaaaaaa" "xy\r # ${a66}aaaaaaa"
 PS1=$(echo 'x\t# ')
 testseq "$a66" "x\t# $a66"
+
+# A UTF-8 prompt takes a column for each character, not each byte:
+# 72 characters fit after this 3-column prompt in 80 columns.
+PS1=$(printf '\303\251\342\206\222 ')
+x=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+testseq "$x" "\0303\0251\0342\0206\0222 $x"
 PS1=' # '

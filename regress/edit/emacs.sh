@@ -394,3 +394,10 @@ testseq "ab/cd\0027\0001\0031" \
 testseq "\0033y" " # \r\nyank something first\r\n # "
 testseq "ab/cd\0027\0027\0031\0033y" \
 	" # ab/cd\0010\0010  \0010\0010\0010\0010\0010   \0010\0010\0010ab/\0010\0010\0010   \0010\0010\0010cd"
+
+# A UTF-8 prompt takes a column for each character, not each byte:
+# 72 characters fit after this 3-column prompt in 80 columns.
+PS1=$(printf '\303\251\342\206\222 ')
+x=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+testseq "$x" "\0303\0251\0342\0206\0222 $x"
+PS1=' # '
