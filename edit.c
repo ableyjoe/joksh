@@ -729,12 +729,22 @@ x_command_glob(int flags, const char *str, int slen, char ***wordsp)
 	char *toglob;
 	char *pat;
 	char *fpath;
-	int nwords;
+	int i, nwords;
 	XPtrV w;
 	struct block *l;
 
 	if (slen < 0)
 		return 0;
+
+	/*
+	 * evalstr() takes word-code, in which the bytes below ' ' mark
+	 * substitutions and quoting, so a word with a control character in
+	 * it cannot be handed to it as it is. Nor would any command worth
+	 * completing have one in its name.
+	 */
+	for (i = 0; i < slen; i++)
+		if ((unsigned char)str[i] < ' ')
+			return 0;
 
 	toglob = add_glob(str, slen);
 

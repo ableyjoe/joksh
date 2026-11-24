@@ -411,3 +411,7 @@ PS1=$(printf '\303\251\342\206\222 ')
 x=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 testseq "$x" "\0303\0251\0342\0206\0222 $x"
 PS1=' # '
+
+# Completing a word with a control character in it, which is not taken
+# for word-code.
+testseq "T\0026\0007\0033=" " # T^G\a"
