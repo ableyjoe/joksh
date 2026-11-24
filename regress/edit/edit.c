@@ -64,7 +64,7 @@ int
 main(int argc, char *argv[])
 {
 	const char	*linefeed = "\003\004\n\r";
-	const char	*prompt = "";
+	const char	*errstr, *prompt = "";
 	char		 in[BUFSIZ], out[BUFSIZ];
 	struct pollfd	 pfd;
 	struct winsize	 ws;
@@ -73,9 +73,22 @@ main(int argc, char *argv[])
 	size_t		 nin, nprompt, nread, nwrite;
 	int		 c, nready, ptyfd, readprompt, ret, status, timeout;
 	int		 pending_resize, pending_cols, pending_quiet, pending_post;
+	int		 cols, lines;
 
-	while ((c = getopt(argc, argv, "p:")) != -1) {
+	cols = 80;
+	lines = 24;
+	while ((c = getopt(argc, argv, "l:p:w:")) != -1) {
 		switch (c) {
+		case 'l':
+			lines = strtonum(optarg, 0, 1000, &errstr);
+			if (errstr != NULL)
+				errx(1, "lines is %s: %s", errstr, optarg);
+			break;
+		case 'w':
+			cols = strtonum(optarg, 1, 1000, &errstr);
+			if (errstr != NULL)
+				errx(1, "cols is %s: %s", errstr, optarg);
+			break;
 		case 'p':
 			prompt = optarg;
 			break;
@@ -108,8 +121,8 @@ main(int argc, char *argv[])
 		err(1, "signal: SIGINT");
 
 	memset(&ws, 0, sizeof(ws));
-	ws.ws_col = 80;
-	ws.ws_row = 24;
+	ws.ws_col = cols;
+	ws.ws_row = lines;
 
 	pid = forkpty(&ptyfd, NULL, NULL, &ws);
 	if (pid == -1)
@@ -255,6 +268,7 @@ sighandler(int sig)
 static void __dead
 usage(void)
 {
-	fprintf(stderr, "usage: edit -p prompt command [args]\n");
+	fprintf(stderr, "usage: edit [-l lines] [-w cols] "
+	    "-p prompt command [args]\n");
 	exit(1);
 }

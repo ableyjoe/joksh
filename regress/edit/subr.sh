@@ -18,7 +18,8 @@
 testseq() {
 	stdin=$1
 	exp=$(echo "$2")
-	act=$(echo -n "$stdin" | ./edit -p "$PS1" -- ${KSH:-/bin/ksh} -r 2>&1)
+	act=$(echo -n "$stdin" | ./edit $EDITFLAGS -p "${PROMPT:-$PS1}" -- \
+	    ${KSH:-/bin/ksh} -r $KSHFLAGS 2>&1)
 	[ $? = 0 ] && [ "$exp" = "$act" ] && return 0
 
 	dump input "$stdin"
