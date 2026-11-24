@@ -55,6 +55,18 @@ int	x_longest_prefix(int , char *const *);
 int	x_basename(const char *, const char *);
 void	x_free_words(int, char **);
 int	x_escape(const char *, size_t, int (*)(const char *, size_t));
+#ifndef SMALL
+/* edit.c: multi-line display */
+#define X_CELLS	8	/* most cells a byte can take: a tab */
+extern int x_ml_on;
+extern int x_ml_held;
+void	x_ml_init(int (*)(int, int, char *));
+void	x_ml_start(void);
+int	x_ml_refresh(const char *, int, int, int);
+void	x_ml_below(void);
+void	x_ml_top(void);
+void	x_ml_finish(void);
+#endif
 /* emacs.c */
 int	x_emacs(char *, size_t);
 void	x_init_emacs(void);

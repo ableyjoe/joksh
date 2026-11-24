@@ -3634,6 +3634,23 @@ See above for a description of what this means.
 The shell is a login shell.
 This option can only be used when the shell is invoked.
 See above for a description of what this means.
+.It Ic multiline
+In command-line editing, show a line that is longer than the screen width on
+as many lines of the screen as it needs, instead of scrolling it horizontally.
+This needs a terminal with automatic margins that can move the cursor up a
+line and clear to the end of the screen, according to its
+.Xr terminfo 5
+entry; on other terminals the line is scrolled as usual.
+A line that would need more lines than the screen has, that holds a character
+that may not take exactly one column, such as a combining mark, an East Asian
+character or an emoji, or that has bytes that are not valid UTF-8, is shown in
+the scrolling window instead, starting on a new line.
+When the terminal changes width, the line is drawn again; as terminals
+rearrange their screens in different ways, part of the old line may be left
+above the new one.
+.Ic multiline
+does not suit a terminal set to show characters of ambiguous width, such as
+accented letters, as two columns.
 .It Ic nohup
 Do not kill running jobs with a
 .Dv SIGHUP
@@ -4623,6 +4640,10 @@ character is displayed in the last column indicating that there are more
 characters after, before and after, or before the current position,
 respectively.
 The line is scrolled horizontally as necessary.
+The
+.Ic multiline
+option makes long lines continue on the following lines of the screen
+instead.
 .Ss Emacs editing mode
 When the
 .Ic emacs

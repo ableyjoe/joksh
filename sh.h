@@ -150,6 +150,7 @@ enum sh_flag {
 	FLOGIN,		/* -l: a login shell */
 	FMARKDIRS,	/* mark dirs with / in file name completion */
 	FMONITOR,	/* -m: job control monitoring */
+	FMULTILINE,	/* show long command lines on several screen lines */
 	FNOCLOBBER,	/* -C: don't overwrite existing files */
 	FNOEXEC,	/* -n: don't execute any commands */
 	FNOGLOB,	/* -f: don't do file globbing */
@@ -348,6 +349,7 @@ extern int	current_wd_size;
  */
 #define MIN_COLS	(2 + MIN_EDIT_SPACE + 3)
 extern	int	x_cols;	/* tty columns */
+extern	int	x_lins;	/* tty lines, 0 if not known */
 
 /* These to avoid bracket matching problems */
 #define OPAREN	'('

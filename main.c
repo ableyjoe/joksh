@@ -71,6 +71,7 @@ char	*current_wd;
 int	 current_wd_size;
 
 int	x_cols = 80;
+int	x_lins;
 
 /*
  * shell initialization

@@ -139,6 +139,7 @@ const struct option sh_options[] = {
 	{ "login",	'l',	    OF_CMDLINE },
 	{ "markdirs",	'X',		OF_ANY },
 	{ "monitor",	'm',		OF_ANY },
+	{ "multiline",	  0,		OF_ANY }, /* non-standard */
 	{ "noclobber",	'C',		OF_ANY },
 	{ "noexec",	'n',		OF_ANY },
 	{ "noglob",	'f',		OF_ANY },

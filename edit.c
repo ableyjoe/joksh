@@ -17,6 +17,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#if !defined(SMALL) && !defined(NO_CURSES)
+#ifdef HAVE_CURSES
+# include <term.h>
+# include <curses.h>
+#elif defined(HAVE_NCURSES)
+# include <term.h>
+# include <ncurses.h>
+#elif defined(HAVE_NCURSESNCURSES)
+# include <ncurses/term.h>
+# include <ncurses/ncurses.h>
+#endif
+#endif
 
 #include "sh.h"
 #include "edit.h"
@@ -81,6 +93,8 @@ check_sigwinch(void)
 			 * and the window is then resized, the app won't
 			 * see the change cause the environ doesn't change.
 			 */
+			if (ws.ws_row)
+				x_lins = ws.ws_row;
 			if (ws.ws_col) {
 				int old_cols = x_cols;
 
@@ -380,6 +394,10 @@ x_print_expansions(int nwords, char *const *words, int is_command)
 {
 	int prefix_len;
 
+#ifndef SMALL
+	if (x_ml_on)
+		x_ml_below();
+#endif
 	/* Check if all matches are in the same directory (in this
 	 * case, we want to omit the directory name)
 	 */
@@ -1229,3 +1247,460 @@ x_escape(const char *s, size_t len, int (*putbuf_func) (const char *, size_t))
 
 	return (rval);
 }
+
+#ifndef SMALL
+/*
+ * Multi-line display, for the multiline option: the whole edit line,
+ * continued on as many screen rows as it needs. For each line the
+ * editor calls x_ml_init(), then x_ml_start() once the prompt is
+ * printed, x_ml_refresh() to bring the display up to date with its
+ * buffer, and x_ml_below() or x_ml_finish() before printing anything
+ * else. When the terminal changes width, x_ml_top() goes back to the
+ * start, for the editor to print the prompt and call x_ml_start()
+ * again. x_ml_on tells whether the display is in use for the line, and
+ * x_ml_held whether it waits for x_ml_start(): from x_ml_init(),
+ * x_ml_below() and x_ml_top() until the prompt has been printed again,
+ * it draws nothing.
+ *
+ * The editor's cells function stores how byte c is shown at column col,
+ * counted from the end of the prompt, and returns the number of cells,
+ * at most X_CELLS. A byte that takes none is a UTF-8 continuation byte,
+ * shown with the byte before it.
+ *
+ * Positions count columns from the start of the row on which the last
+ * line of the prompt begins: the prompt takes up 0 to ml_pw - 1 and the
+ * edit buffer follows it. A position is turned into a row and column
+ * with ml_cols, the width the line was laid out for, which only
+ * x_ml_start() changes. ml_pos is always where the cursor really is.
+ */
+int		x_ml_on;		/* in use for this line */
+int		x_ml_held;		/* waiting for x_ml_start() */
+static int	(*ml_cells)(int, int, char *);
+static int	ml_pw;			/* width of last line of prompt */
+static int	ml_cols;		/* screen width the line is laid out for */
+static int	ml_pos;			/* position of the cursor */
+static int	ml_eol;			/* position of the end of line */
+static int	ml_olen;		/* length of the line on display */
+static int	ml_stale;		/* old text may follow the line */
+static char	ml_obuf[LINE];		/* copy of the line on display */
+
+static int	ml_width(int, int);
+static int	ml_cont(int);
+static int	ml_bytepos(const char *, int);
+static void	ml_putcells(const char *, int, int, int);
+static void	ml_move(const char *, int, int);
+static void	ml_right(const char *, int, int, int);
+static char	*ml_cuf(int);
+static void	ml_fixwrap(void);
+static int	ml_giveup(void);
+static int	ml_check(const char *, int, int);
+static int	ml_narrow(unsigned int);
+
+/* What ml_check() finds. */
+#define ML_SHOW		0	/* the line can be shown */
+#define ML_WAIT		1	/* a character is still being typed */
+#define ML_NOT		2	/* the line cannot be shown */
+
+/* Use the display for this line if the option and the terminal allow. */
+void
+x_ml_init(int (*cells)(int, int, char *))
+{
+	static int	tried;
+
+	x_ml_on = 0;
+	if (!Flag(FMULTILINE))
+		return;
+	/* Look the terminal up once; ^L tries again. */
+	if (cur_term == NULL && Flag(FTALKING) && !tried) {
+		tried = 1;
+		initcurses();
+	}
+	if (cur_term == NULL || !auto_right_margin ||
+	    cursor_up == NULL || *cursor_up == '\0' ||
+	    clr_eos == NULL || *clr_eos == '\0')
+		return;
+	x_ml_on = 1;
+	x_ml_held = 1;
+	ml_cells = cells;
+	ml_pw = promptlen(prompt, NULL);	/* not truncated */
+}
+
+/* The prompt has just been printed. */
+void
+x_ml_start(void)
+{
+	x_ml_held = 0;
+	ml_cols = x_cols;
+	ml_pos = ml_eol = ml_pw;
+	ml_olen = 0;
+	ml_stale = 1;
+	ml_fixwrap();
+}
+
+/*
+ * Bring the display up to date with the len bytes in buf, and put the
+ * cursor on byte cursor: on its first cell if leftside is set, else on
+ * its last. If the line is too long or too tall for the screen, stop
+ * using the display, leave the cursor on the last row of the line, and
+ * return 0, for the editor to show the line another way.
+ */
+int
+x_ml_refresh(const char *buf, int len, int cursor, int leftside)
+{
+	int	eol, first, pos, w;
+
+	if (x_ml_held)
+		return 1;
+	/*
+	 * Fall back on what the display cannot show: a line it cannot
+	 * hold, one ml_check() turns down, or a line taller than the
+	 * screen, which may have lost rows since the line was drawn. When
+	 * the screen height is not known (x_lins == 0, as it is before the
+	 * first TIOCGWINSZ) the height test is skipped and even a very
+	 * tall line is drawn in full. A character still being typed is
+	 * drawn once it is whole.
+	 */
+	if (len < 0 || len > (int)sizeof(ml_obuf) || cursor < 0 ||
+	    cursor > len || (x_lins > 0 && ml_eol / ml_cols >= x_lins))
+		return ml_giveup();
+	switch (ml_check(buf, len, cursor)) {
+	case ML_WAIT:
+		return 1;
+	case ML_NOT:
+		return ml_giveup();
+	}
+	for (first = 0; first < len && first < ml_olen; first++)
+		if (buf[first] != ml_obuf[first])
+			break;
+	if (first < len || first < ml_olen) {
+		/* Redraw from the start of the changed character. */
+		while (first > 0 && ((first < len && ml_cont(buf[first])) ||
+		    (first < ml_olen && ml_cont(ml_obuf[first]))))
+			first--;
+		eol = ml_bytepos(buf, len);
+		if (x_lins > 0 && eol / ml_cols >= x_lins)
+			return ml_giveup();
+		pos = ml_bytepos(buf, first);
+		ml_move(buf, len, pos);
+		ml_putcells(buf, len, pos, eol);
+		ml_pos = eol;
+		ml_fixwrap();
+		if (eol < ml_eol || ml_stale)
+			tputs(clr_eos, 1, x_putc);
+		ml_eol = eol;
+		ml_stale = 0;
+		memcpy(ml_obuf, buf, len);
+		ml_olen = len;
+	}
+
+	pos = ml_bytepos(buf, cursor);
+	if (!leftside && cursor < len) {
+		w = ml_width((unsigned char)buf[cursor], pos);
+		if (w > 0)
+			pos += w - 1;
+	}
+	ml_move(buf, len, pos);
+	return 1;
+}
+
+/*
+ * Go to the last row of the line, so that a newline starts a new row,
+ * and hold the display.
+ */
+void
+x_ml_below(void)
+{
+	int	row;
+
+	if (x_ml_held)
+		return;
+	row = ml_eol > 0 ? (ml_eol - 1) / ml_cols : 0;
+	if (ml_pos / ml_cols != row)
+		ml_move(ml_obuf, ml_olen, row * ml_cols);
+	x_ml_held = 1;
+}
+
+/*
+ * The terminal has changed width, and the editor is to print the prompt
+ * and the line again: go back to the start of the row on which the last
+ * line of the prompt begins, and hold the display. Some terminals wrap
+ * their lines again at the new width and some do not, so go up by the
+ * smaller of the rows the cursor would be down at the old width and at
+ * the new, so as never to go above the line and clear what is there.
+ */
+void
+x_ml_top(void)
+{
+	int	rows;
+
+	if (!x_ml_held) {
+		rows = ml_pos / ml_cols;
+		if (ml_pos / x_cols < rows)
+			rows = ml_pos / x_cols;
+		x_putc('\r');
+		while (rows-- > 0)
+			tputs(cursor_up, 1, x_putc);
+	}
+	x_ml_held = 1;
+}
+
+/* Stop using the display for the line, and go below it. */
+static int
+ml_giveup(void)
+{
+	x_ml_below();
+	x_ml_on = 0;
+	return 0;
+}
+
+/* Go to the end of the line for ^C or ^D, and stop using the display. */
+void
+x_ml_finish(void)
+{
+	if (!x_ml_held)
+		ml_move(ml_obuf, ml_olen, ml_eol);
+	x_ml_on = 0;
+}
+
+/*
+ * Whether the display can show the len bytes in buf, with the cursor at
+ * byte cursor: only if every character is valid UTF-8 known to take the
+ * one column the display gives it. Outside a few blocks of alphabetic
+ * scripts and symbols a character may take no column, as a combining
+ * mark does, or two, as East Asian characters and emoji do, and
+ * terminals do not agree on what to show for bytes that are not valid
+ * UTF-8, or how wide to show it; the display would lose its place on
+ * the screen. Only a character cut short at the cursor, as when vi
+ * mode has yet to read the rest of it, is to be waited for.
+ */
+static int
+ml_check(const char *buf, int len, int cursor)
+{
+	static const unsigned int	least[] = { 0, 0, 0x80, 0x800, 0x10000 };
+	char				cells[X_CELLS];
+	unsigned int			cp;
+	unsigned char			c;
+	int				i, j, n, wait = 0;
+
+	for (i = 0; i < len; i += n) {
+		c = buf[i];
+		n = 1;
+		/* ASCII, or a byte shown as several cells of it. */
+		if (c < 0x80 || ml_cells(c, 0, cells) > 1)
+			continue;
+		if (c >= 0xc2 && c <= 0xdf) {
+			n = 2;
+			cp = c & 0x1f;
+		} else if (c >= 0xe0 && c <= 0xef) {
+			n = 3;
+			cp = c & 0x0f;
+		} else if (c >= 0xf0 && c <= 0xf4) {
+			n = 4;
+			cp = c & 0x07;
+		} else
+			return ML_NOT;
+		for (j = 1; j < n; j++) {
+			if (i + j >= len ||
+			    ((unsigned char)buf[i + j] & 0xc0) != 0x80)
+				break;
+			cp = cp << 6 | (buf[i + j] & 0x3f);
+		}
+		if (j < n) {
+			if (i + j != cursor)
+				return ML_NOT;
+			wait = 1;
+			n = j;
+			continue;
+		}
+		if (cp < least[n] || !ml_narrow(cp))
+			return ML_NOT;
+	}
+	return wait ? ML_WAIT : ML_SHOW;
+}
+
+/* Whether Unicode character cp is one known to take one column. */
+static int
+ml_narrow(unsigned int cp)
+{
+	static const struct {
+		unsigned int	lo, hi;
+	} narrow[] = {
+		/* Assigned, with no combining marks or format characters. */
+		{ 0x00a0, 0x00ac },	/* Latin-1, without the soft hyphen */
+		{ 0x00ae, 0x02ff },	/* Latin extended, IPA, modifiers */
+		{ 0x0370, 0x0377 },	/* Greek */
+		{ 0x037a, 0x037f },
+		{ 0x0384, 0x038a },
+		{ 0x038c, 0x038c },
+		{ 0x038e, 0x03a1 },
+		{ 0x03a3, 0x0482 },	/* Greek and Cyrillic */
+		{ 0x048a, 0x052f },	/* Cyrillic */
+		{ 0x1e00, 0x1eff },	/* Latin extended additional */
+		{ 0x2010, 0x2027 },	/* dashes, quotes and bullets */
+		{ 0x202f, 0x205e },	/* more punctuation */
+		{ 0x20a0, 0x20c0 },	/* currency */
+		{ 0x2100, 0x218b },	/* letterlike symbols, number forms */
+		{ 0x2190, 0x22ff },	/* arrows and maths */
+		{ 0x2500, 0x259f },	/* box drawing and blocks */
+	};
+	size_t	i;
+
+	for (i = 0; i < sizeof(narrow) / sizeof(narrow[0]); i++)
+		if (cp >= narrow[i].lo && cp <= narrow[i].hi)
+			return 1;
+	return 0;
+}
+
+/* The number of columns byte c takes up at position pos. */
+static int
+ml_width(int c, int pos)
+{
+	char	cells[X_CELLS];
+
+	return ml_cells(c, pos - ml_pw, cells);
+}
+
+/* Is byte c a UTF-8 continuation byte, shown with the byte before it? */
+static int
+ml_cont(int c)
+{
+	return ml_width((unsigned char)c, ml_pw) == 0;
+}
+
+/* The position of the first cell of byte n of buf. */
+static int
+ml_bytepos(const char *buf, int n)
+{
+	int	i, pos;
+
+	pos = ml_pw;
+	for (i = 0; i < n; i++)
+		pos += ml_width((unsigned char)buf[i], pos);
+	return pos;
+}
+
+/*
+ * Write the cells of the len bytes in buf from position from up to, not
+ * including, to; blanks past the end of the line. from must not be
+ * inside the prompt, and only the end of the line may fill a row.
+ */
+static void
+ml_putcells(const char *buf, int len, int from, int to)
+{
+	char		cells[X_CELLS];
+	int		i, j, n, pos, put;
+	unsigned char	c;
+
+	pos = ml_pw;
+	put = 0;
+	for (i = 0; i < len; i++) {
+		c = buf[i];
+		n = ml_cells(c, pos - ml_pw, cells);
+		if (n == 0) {
+			if (put)
+				x_putc(c);
+			continue;
+		}
+		if (pos >= to)
+			break;
+		for (j = 0; j < n; j++, pos++) {
+			put = pos >= from && pos < to;
+			if (put)
+				x_putc(cells[j]);
+		}
+		/* A tab is no UTF-8 character to continue. */
+		if (c == '\t')
+			put = 0;
+	}
+	for (; pos < to; pos++)
+		if (pos >= from)
+			x_putc(' ');
+}
+
+/*
+ * Move the cursor to pos, which is not past the end of the line in buf,
+ * the len bytes being drawn or, between refreshes, the line on display.
+ */
+static void
+ml_move(const char *buf, int len, int pos)
+{
+	char	*s;
+	int	row, col, trow, tcol;
+
+	row = ml_pos / ml_cols;
+	col = ml_pos % ml_cols;
+	trow = pos / ml_cols;
+	tcol = pos % ml_cols;
+
+	/* The rows below hold the rest of the line, so they exist. */
+	if (trow > row) {
+		for (; row < trow; row++)
+			x_putc('\n');
+		x_putc('\r');
+		col = 0;
+	}
+	/*
+	 * Going up keeps the column, so set it first, on a row where the
+	 * cells after the cursor belong to the line or are blank. Going
+	 * left, back up or start again from the first column, whichever
+	 * is shorter.
+	 */
+	if (tcol < col) {
+		s = ml_cuf(tcol);
+		if (tcol == 0 && col > 1)
+			x_putc('\r');
+		else if (s != NULL && (int)strlen(s) + 1 < col - tcol) {
+			x_putc('\r');
+			tputs(s, 1, x_putc);
+		} else {
+			for (; col > tcol; col--)
+				x_putc('\b');
+		}
+	} else if (col < tcol)
+		ml_right(buf, len, row * ml_cols + col, row * ml_cols + tcol);
+	for (; row > trow; row--)
+		tputs(cursor_up, 1, x_putc);
+	ml_pos = pos;
+}
+
+/*
+ * Move right along a row from position from to position to: with the
+ * terminal's sequence for it, or by writing the cells of buf in between,
+ * whichever is shorter.
+ */
+static void
+ml_right(const char *buf, int len, int from, int to)
+{
+	char	*s;
+
+	s = ml_cuf(to - from);
+	if (s != NULL && (int)strlen(s) < to - from)
+		tputs(s, 1, x_putc);
+	else
+		ml_putcells(buf, len, from, to);
+}
+
+/* The terminal's sequence for moving n columns right, or NULL. */
+static char *
+ml_cuf(int n)
+{
+	if (n <= 0 || parm_right_cursor == NULL)
+		return NULL;
+	return tparm(parm_right_cursor, (long)n, 0L, 0L, 0L, 0L, 0L, 0L, 0L,
+	    0L);
+}
+
+/*
+ * After the last column of a row, terminals differ in where the cursor
+ * is; a blank and a carriage return leave it at the start of the next
+ * row on all of them. Only used at the end of the line.
+ */
+static void
+ml_fixwrap(void)
+{
+	if (ml_pos > 0 && ml_pos % ml_cols == 0) {
+		x_putc(' ');
+		x_putc('\r');
+	}
+}
+#endif /* SMALL */
