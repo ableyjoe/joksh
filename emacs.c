@@ -155,6 +155,10 @@ static int	x_fold_case(int);
 static char	*x_lastcp(void);
 static void	do_complete(int, Comp_type);
 static int	isu8cont(unsigned char);
+#ifndef SMALL
+static int	emacs_cells(int, int, char *);
+static void	emacs_refresh(void);
+#endif
 
 /* proto's for keybindings */
 static int	x_abort(int);
@@ -310,7 +314,20 @@ x_emacs(char *buf, size_t len)
 	x_displen = xx_cols - 2 - x_col;
 	x_adj_done = 0;
 
+#ifndef SMALL
+	x_ml_init(emacs_cells);
+#endif
 	pprompt(prompt, 0);
+#ifndef SMALL
+	if (x_ml_on) {
+		/* The line follows the prompt, however wide. */
+		if (x_displen < 1) {
+			x_col = 0;
+			x_displen = xx_cols - 2;
+		}
+		x_ml_start();
+	} else
+#endif
 	if (x_displen < 1) {
 		x_col = 0;
 		x_displen = xx_cols - 2;
@@ -329,6 +346,9 @@ x_emacs(char *buf, size_t len)
 	x_arg = -1;
 	x_last_command = NULL;
 	while (1) {
+#ifndef SMALL
+		emacs_refresh();
+#endif
 		x_flush();
 		if ((at = x_e_getu8(line, at)) < 0) {
 			x_resize_cb = NULL;
@@ -400,6 +420,10 @@ x_emacs(char *buf, size_t len)
 			return (ret);
 			break;
 		case KINTR:
+#ifndef SMALL
+			if (x_ml_on)
+				x_ml_finish();
+#endif
 			trapsig(SIGINT);
 			x_mode(false);
 			unwind(LSHELL);
@@ -731,6 +755,11 @@ x_zotcp(char *p)
 {
 	unsigned char uc = (unsigned char)*p;
 
+#ifndef SMALL
+	/* The multi-line display draws the line; see x_e_putc(). */
+	if (x_ml_on && !x_ml_held)
+		return;
+#endif
 	if (uc == '\t') {
 		/*  Kludge, tabs are always four spaces.  */
 		x_e_puts("    ");
@@ -851,6 +880,9 @@ x_search_char_back(int c)
 static int
 x_newline(int c)
 {
+#ifndef SMALL
+	emacs_refresh();
+#endif
 	x_e_putc('\r');
 	x_e_putc('\n');
 	x_flush();
@@ -861,6 +893,10 @@ x_newline(int c)
 static int
 x_end_of_text(int c)
 {
+#ifndef SMALL
+	if (x_ml_on)
+		x_ml_finish();
+#endif
 	x_zotc(edchars.eof);
 	x_putc('\r');
 	x_putc('\n');
@@ -957,6 +993,9 @@ x_search_hist(int c)
 			x_e_puts("\nI-search: ");
 			x_e_puts(pat);
 		}
+#ifndef SMALL
+		emacs_refresh();
+#endif
 		x_flush();
 		if ((c = x_e_getc()) < 0)
 			return KSTD;
@@ -1097,6 +1136,11 @@ x_redraw(int limit)
 	int	i, j, truncate = 0, dcols;
 	char	*cp;
 
+#ifndef SMALL
+	/* The next refresh draws what changed. */
+	if (x_ml_on && !x_ml_held && limit >= 0)
+		return;
+#endif
 	x_adj_ok = 0;
 	if (limit == -2) {
 		int cleared = 0;
@@ -1116,6 +1160,15 @@ x_redraw(int limit)
 	else if (limit >= 0)
 		x_e_putc('\r');
 	x_flush();
+#ifndef SMALL
+	if (x_ml_on) {
+		/* A new multi-line display. */
+		pprompt(prompt + prompt_skip, 0);
+		x_ml_start();
+		x_adj_ok = 1;
+		return;
+	}
+#endif
 	if (xbp == xbuf) {
 		x_col = promptlen(prompt, NULL);
 		if (x_col > xx_cols)
@@ -1972,6 +2025,18 @@ x_e_getu8(char *buf, int off)
 static void
 x_e_putc(int c)
 {
+#ifndef SMALL
+	/*
+	 * The multi-line display draws the line, so drop what would draw
+	 * it here. A newline goes below the line and holds the display.
+	 */
+	if (x_ml_on && !x_ml_held) {
+		if (c == '\n')
+			x_ml_below();
+		else if (c != BEL)
+			return;
+	}
+#endif
 	if (c == '\r' || c == '\n')
 		x_col = 0;
 	if (x_col < xx_cols) {
@@ -2215,6 +2280,44 @@ x_fold_case(int c)
 	return KSTD;
 }
 
+#ifndef SMALL
+/*
+ * For the multi-line display: store how byte c is shown in cells and
+ * return the number of cells, as x_zotc() and x_size() do.
+ */
+static int
+emacs_cells(int c, int col, char *cells)
+{
+	if (c == '\t') {
+		memset(cells, ' ', 4);	/* tabs are always four spaces */
+		return 4;
+	}
+	if (iscntrl(c)) {
+		cells[0] = '^';
+		cells[1] = UNCTRL(c);
+		return 2;
+	}
+	if (isu8cont(c))
+		return 0;
+	cells[0] = c;
+	return 1;
+}
+
+/*
+ * Bring the multi-line display up to date with the line, or, if the
+ * line has become too tall for it, show the line in the window instead.
+ */
+static void
+emacs_refresh(void)
+{
+	if (!x_ml_on || x_ml_refresh(xbuf, xep - xbuf, xcp - xbuf, 1))
+		return;
+	xbp = xbuf;
+	x_redraw(-1);
+	x_goto(xcp);
+}
+#endif /* SMALL */
+
 /* NAME:
  *      x_lastcp - last visible byte
  *
@@ -2258,6 +2361,12 @@ x_emacs_resize(void)
 	int cr_done = 0, cleared = 0;
 
 #ifndef SMALL
+	/*
+	 * The multi-line display goes back to where the prompt begins, and
+	 * draws the line again once x_redraw() has printed the prompt.
+	 */
+	if (x_ml_on)
+		x_ml_top();
 	if (cur_term != NULL) {
 		if (carriage_return != NULL &&
 		    tputs(carriage_return, 1, x_putc) != ERR)
@@ -2289,6 +2398,9 @@ x_emacs_resize(void)
 		xlp_valid = false;
 		if (xcp <= x_lastcp()) {
 			x_redraw(0);
+#ifndef SMALL
+			emacs_refresh();
+#endif
 			x_flush();
 			return;
 		}
@@ -2297,6 +2409,10 @@ x_emacs_resize(void)
 	x_col = 0;
 	x_displen = xx_cols - 2;
 	x_adjust();
+#ifndef SMALL
+	emacs_refresh();
+	x_flush();
+#endif
 }
 
 #endif /* EMACS */

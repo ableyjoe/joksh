@@ -423,3 +423,107 @@ testseq "$(rep 40 y)\0001\0013\0020\0001\0031\0033y" \
     " # $(rep 40 y)$(rep 40 '\b')$(rep 40 ' ')$(rep 40 '\b')\r$(rep 37 h)$(rep 41 ' ')<$(rep 42 '\b')\r # : $(rep 73 h)>$(rep 76 '\b')\a\r\nyank something first\r\n # : $(rep 73 h)>$(rep 76 '\b')"
 rm -f $HISTFILE
 HISTFILE=
+
+# set -o multiline: Long lines continue on the following screen lines, as
+# in vi mode. The terminal is 80 columns wide. The xterm terminfo entry
+# has automatic margins, cursor up (\E[A) and clear to end of screen (\E[J).
+TERM=xterm
+export TERM
+KSHFLAGS="-o multiline"
+ED='\0033[J'
+UP='\0033[A'
+
+a76=$(rep 76 a)
+t77="a$ED$a76"		# 77 a typed: clear the screen once, at the start
+
+# Control characters, the bell, and going past the last column.
+testseq "\0026\0001" " # ^A$ED"
+testseq "\0002" " # \0007"
+testseq "${a76}ab" " # $t77 \rb"
+
+# The screen width is not hardcoded: the same wrapping on 20 columns.
+EDITFLAGS="-w 20"
+testseq "$(rep 17 a)ab" " # a$ED$(rep 16 a) \rab"
+EDITFLAGS=
+
+# When the terminal changes width, the line is drawn again from where
+# the prompt begins, or from lower down if the line takes fewer rows at
+# the new width: terminals that wrap it again put it there.
+testseq "${a76}ab\000RS60" " # $t77 \rb\r$UP\r$ED\r # ${a76}ab$ED"
+testseq "$(rep 100 a)\000RS120" \
+    " # $t77 \r$(rep 23 a)\r\r$ED\r # $(rep 100 a)$ED"
+
+# Moving to an earlier line and back: Set the column, then move up.
+testseq "${a76}ab\0001" " # $t77 \rb  $UP"
+testseq "${a76}ab\0001\0005" " # $t77 \rb  $UP\r\n\rb"
+testseq "${a76}a$(rep 40 b)\0001" " # $t77 \r$(rep 40 b)\r\0033[3C$UP"
+
+# Changes are drawn from the first changed character, and a shorter line
+# clears what is left of the old one.
+testseq "${a76}ab\0001X" " # $t77 \rb  ${UP}X${a76}ab  $UP"
+testseq "${a76}ab\0001\0033[3~" " # $t77 \rb  $UP\0033[76Cb \r$ED   $UP"
+testseq "${a76}ab\0025" " # $t77 \rb  $UP$ED"
+testseq "${a76}ab\0024" " # $t77 \rb\0033[78C${UP}ba"
+
+# ^C, ^D, and newlines: after a line that fills its last line, after ^[#.
+testseq "${a76}ab\0001\0003" " # $t77 \rb  $UP\r\n\rb\r\n # "
+testseq "\0004" " # ^D\r\r"
+testseq "#${a76}\n" " # #$ED$a76 \r$UP\r\n # "
+testseq "${a76}ab\0001\0033#" " # $t77 \rb  $UP#${a76}ab $UP\r\n\r\r\n # "
+
+# A UTF-8 character and a tab starting at the end of a line.
+testseq "${a76}a\0303\0251b" " # $t77 \r\0303\0251b"
+testseq "$(rep 75 a)\0026\tb" " # a$ED$(rep 74 a)    b"
+
+# A character that may not take one column, such as a combining mark or
+# a wide one, has the line shown in the window, on a new line.
+testseq "ab e\0314\0201c" " # a${ED}b e\r\n # ab e\0314\0201c"
+testseq "ab\0344\0270\0255c" " # a${ED}b\r\n # ab\0344\0270\0255c"
+testseq "a\0342\0206\0222b" " # a$ED\0342\0206\0222b"
+# So does a byte that is not part of valid UTF-8.
+testseq "ab\0303xc" " # a${ED}b\r\n # ab\0303xc"
+testseq "ab\0251c" " # a${ED}b\r\n # ab\0251c"
+testseq "ab\0370c" " # a${ED}b\r\n # ab\0370c"
+
+# ^L, history and ^O.
+testseq "${a76}ab\0014" " # $t77 \rb\0033[H\0033[2J # ${a76}ab$ED"
+testseq ": $a76\n\0020" " # :$ED $(rep 75 a) \ra\r\n # : $a76$ED"
+h2=" # : ${a76}ab$ED"	# the second line, from history
+testseq ": 1\n: ${a76}ab\n\0020\0020\0017" \
+    " # :$ED 1\r\n # :$ED $(rep 75 a) \raab\r\n$h2  ${UP}1$ED\r\n$h2"
+
+# Messages, the history search and completion lists are printed below the
+# line, which is then shown again.
+testseq "${a76}ab\0001\0031" \
+    " # $t77 \rb  $UP\r\n\r\r\nnothing to yank\r\n # ${a76}ab$ED  $UP"
+testseq "#${a76}ab\n\0022b" \
+    " # #$ED$a76 \rab\r\n # \r\nI-search: \r\n\r # #${a76}ab$ED"
+mldir=$(mktemp -d /tmp/ml.XXXXXXXX)
+touch $mldir/f1 $mldir/f2
+cl="#$(rep 75 a) $mldir/f"	# the line
+testseq "$cl\0033=" \
+    " # #$ED$(rep 75 a)  \r$mldir/f\r\r\nf1  f2  \r\n\r # $cl$ED"
+rm -r $mldir
+
+# A line taller than the screen continues in the window, on a new line; a
+# screen of unknown height. The window scrolls on by half its width.
+sc="\r$(rep 37 a)$(rep 41 ' ')<$(rep 42 '\b')"
+EDITFLAGS="-l 2"
+testseq "$(rep 160 a)" \
+    " # $t77 \r$(rep 79 a)\r\n # $(rep 75 a)>\b${sc}aaa"
+EDITFLAGS="-l 0"
+testseq "${a76}ab" " # $t77 \rb"
+EDITFLAGS=
+
+# A prompt wider than the screen is not truncated, and the line follows
+# one that fills its line.
+PS1="$(rep 85 p) # "
+testseq "ab" "${PS1}a${ED}b"
+PS1="$(rep 77 p) # "
+testseq "ab" "$PS1 \ra${ED}b"
+PS1=' # '
+
+# Without the option, after turning it off.
+testseq "set +o multiline\n${a76}ab" \
+    " # s${ED}et +o multiline\r\n # $(rep 75 a)${sc}aab"
+KSHFLAGS=
