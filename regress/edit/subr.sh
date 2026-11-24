@@ -38,3 +38,15 @@ dump() {
 	printf '%s:\n>>>%s<<<\n' "$1" "$(echo -n "$2" | $VIS)"
 	echo -n "$2" | $HEXDUMP
 }
+
+# rep n string: The string repeated n times, as is.
+rep() {
+	rep_n=$1
+	rep_s=
+
+	while [ $rep_n -gt 0 ]; do
+		rep_s=$rep_s$2
+		rep_n=$((rep_n - 1))
+	done
+	printf '%s' "$rep_s"
+}

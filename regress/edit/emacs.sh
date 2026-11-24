@@ -415,3 +415,11 @@ PS1=' # '
 # Completing a word with a control character in it, which is not taken
 # for word-code.
 testseq "T\0026\0007\0033=" " # T^G\a"
+
+# Yank-pop after a yank that did not fit in the line leaves the line be.
+HISTFILE=$(mktemp)
+echo ": $(rep 4086 h)" >$HISTFILE
+testseq "$(rep 40 y)\0001\0013\0020\0001\0031\0033y" \
+    " # $(rep 40 y)$(rep 40 '\b')$(rep 40 ' ')$(rep 40 '\b')\r$(rep 37 h)$(rep 41 ' ')<$(rep 42 '\b')\r # : $(rep 73 h)>$(rep 76 '\b')\a\r\nyank something first\r\n # : $(rep 73 h)>$(rep 76 '\b')"
+rm -f $HISTFILE
+HISTFILE=

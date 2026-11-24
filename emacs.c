@@ -1278,15 +1278,19 @@ x_yank(int c)
 static int
 x_meta_yank(int c)
 {
-	int	len;
-	if ((x_last_command != x_yank && x_last_command != x_meta_yank) ||
-	    killstack[killtp] == 0) {
+	int	len = -1;
+
+	if ((x_last_command == x_yank || x_last_command == x_meta_yank) &&
+	    killstack[killtp] != 0)
+		len = strlen(killstack[killtp]);
+	/* A yank that did not fit in the line put nothing before xcp. */
+	if (len < 0 || len > xcp - xbuf ||
+	    strncmp(xcp - len, killstack[killtp], len) != 0) {
 		killtp = killsp;
 		x_e_puts("\nyank something first");
 		x_redraw(-1);
 		return KSTD;
 	}
-	len = strlen(killstack[killtp]);
 	x_goto(xcp - len);
 	x_delete(len, false);
 	do {
