@@ -5629,6 +5629,48 @@ Privileged shell profile.
 .Sh VERSION
 This page documents version @(#)PD KSH v5.2.14 99/07/13.2 of the public
 domain Korn shell.
+.Sh HISTORY
+The public domain Korn shell, pdksh, was created in the late 1980s by
+.An Eric Gisin ,
+from
+.An Charles Forsyth Ns 's
+public domain clone of the 7th edition Bourne shell.
+.Ox
+took it into its base system as
+.Nm ksh
+and has maintained it there since.
+oksh, a portable version of the
+.Ox
+ksh for other systems, was started by
+.An Brian Callahan
+in 2015.
+.Pp
+This build of
+.Nm
+is joksh, a fork of oksh 7.9 made in November 2026 to carry changes that are
+not,
+or not yet, part of the
+.Ox
+ksh: the
+.Ic multiline
+option, for editing a command line on as many rows of the screen as it needs,
+and fixes to the line editors, some of them by
+.An Kirill A. Korinsky .
+Its own changes were written by Claude, an AI model made by Anthropic, working
+as a robot engineering team managed by
+.An Joe Abley .
+The
+.Ox
+developers have said that they cannot accept code written by AI,
+whose copyright status is unclear, so the larger changes are kept in joksh;
+the smaller fixes are being offered to
+.Ox .
+joksh follows oksh, and through it
+.Ox ,
+and keeps its changes small and separate so that it can go on doing so.
+See
+.Lk https://github.com/ableyjoe/joksh
+for its source and the history of each change.
 .Sh AUTHORS
 .An -nosplit
 This shell is based on the public domain 7th edition Bourne shell clone by
