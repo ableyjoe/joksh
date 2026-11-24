@@ -335,3 +335,9 @@ testseq "a$c100$c100$c100$c100" " # a\ba$c100$c100$c100$c100"
 # Completing a word with a control character in it, which is not taken
 # for word-code.
 testseq "T\0026\0007\0033=" " # T^\b^G\b\a"
+
+# A search that was interrupted leaves nothing behind for the next one,
+# and a count before / starts a search as it does without one.
+testseq "\0033/abc\0003\0033/\0027a" " # /abc^C\r\n # /a"
+testseq "\0033/abc\0003\0033/\0010a" " # /abc^C\r\n # /\b \b"
+testseq "abc\00332/x\0003" " # abc\b\b\b/  \b\bx^C\r\n # "

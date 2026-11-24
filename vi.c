@@ -58,6 +58,7 @@ static int	putbuf(const char *, int, int);
 static void	del_range(int, int);
 static int	findch(const char *, int, int, int, int);
 static int	vi_u8len(unsigned char);
+static int	vi_srchstart(int);
 static int	forwword(int);
 static int	backword(int);
 static int	endword(int);
@@ -312,17 +313,8 @@ vi_hook(int ch)
 			} else {
 				curcmd[cmdlen++] = ch;
 				state = nextstate(ch);
-				if (state == VSEARCH) {
-					save_cbuf();
-					es->cursor = 0;
-					es->linelen = 0;
-					if (ch == '/') {
-						if (putbuf("/", 1, 0) != 0)
-							return -1;
-					} else if (putbuf("?", 1, 0) != 0)
-						return -1;
-					refresh_line(0);
-				}
+				if (state == VSEARCH && vi_srchstart(ch) != 0)
+					return -1;
 			}
 		}
 		break;
@@ -343,6 +335,8 @@ vi_hook(int ch)
 		else {
 			curcmd[cmdlen++] = ch;
 			state = nextstate(ch);
+			if (state == VSEARCH && vi_srchstart(ch) != 0)
+				return -1;
 		}
 		break;
 
@@ -2372,6 +2366,23 @@ static int
 isu8cont(unsigned char c)
 {
 	return !Flag(FVISHOW8) && (c & (0x80 | 0x40)) == 0x80;
+}
+
+/*
+ * Begin reading a search pattern after / or ?: show it in place of the
+ * line, which is saved, and start with an empty pattern.
+ */
+static int
+vi_srchstart(int ch)
+{
+	save_cbuf();
+	es->cursor = 0;
+	es->linelen = 0;
+	srchlen = 0;
+	if (putbuf(ch == '/' ? "/" : "?", 1, 0) != 0)
+		return -1;
+	refresh_line(0);
+	return 0;
 }
 
 /* Number of bytes in the UTF-8 character that begins with c. */
