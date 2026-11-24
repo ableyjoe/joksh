@@ -3,14 +3,14 @@
 .\"	Public Domain
 .\"
 .Dd $Mdocdate: April 24 2025 $
-.Dt OKSH 1
+.Dt JOKSH 1
 .Os
 .Sh NAME
-.Nm oksh ,
+.Nm joksh ,
 .Nm rksh
 .Nd public domain Korn shell
 .Sh SYNOPSIS
-.Nm oksh
+.Nm joksh
 .Bk -words
 .Op Fl +abCefhiklmnpruvXx
 .Op Fl +o Ar option
@@ -1462,6 +1462,11 @@ above for details.
 .Sy Note :
 This parameter is not imported from the environment when the shell is
 started.
+.It Ev JOKSH_VERSION
+The name and version of joksh (read-only), as in
+.Dq joksh 1.0 .
+.Ev OKSH_VERSION
+says which release of oksh it is built on.
 .It Ev KSH_VERSION
 The version of the shell and the date the version was created (read-only).
 .It Ev LINENO

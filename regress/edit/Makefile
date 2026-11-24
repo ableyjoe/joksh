@@ -5,7 +5,7 @@
 # the system's sh, whose echo(1) differs too much between systems.
 
 CC ?=		cc
-KSH ?=		../../oksh
+KSH ?=		../../joksh
 LIBUTIL ?=	-lutil
 
 # The last two runs check that multiline changes nothing on a terminal

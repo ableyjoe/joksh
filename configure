@@ -785,7 +785,7 @@ mandirset=0
 bindir="$prefix/bin"
 mandir="$prefix/share/man"
 
-instprog="oksh"
+instprog="joksh"
 libs=""
 curses=1
 instsh=0
@@ -834,7 +834,7 @@ do
 	if [ "x$opt" = "x--enable-ksh" ] ; then
 	  instprog="ksh"
 	else
-	  instprog="oksh"
+	  instprog="joksh"
 	fi
 	;;
     --disable-sh|--enable-sh)
@@ -1037,7 +1037,7 @@ if [ $? -ne 0 ] ; then
     gnu99check
     if [ $? -ne 0 ] ; then
       echo "no"
-      echo "You must have a C99 compiler to build oksh!"
+      echo "You must have a C99 compiler to build joksh!"
       exit 1
     else
       cflags="$cflags -std=gnu99"
@@ -1195,7 +1195,7 @@ else
     if [ $? -eq 0 ] ; then
       echo "yes"
     else
-      echo "Error: oksh requires clock_gettime()"
+      echo "Error: joksh requires clock_gettime()"
       exit 1
     fi
   fi
@@ -1232,14 +1232,14 @@ if [ $curses -eq 1 ] ; then
       else
 	echo "#define NO_CURSES" >> pconfig.h
 	echo "not found"
-	echo "oksh will be built without screen clearing support"
+	echo "joksh will be built without screen clearing support"
       fi
     fi
   fi
 else
   echo "#define NO_CURSES" >> pconfig.h
   echo "disabled by user"
-  echo "oksh will be built without screen clearing support"
+  echo "joksh will be built without screen clearing support"
 fi
 
 printf "checking for issetugid... "
