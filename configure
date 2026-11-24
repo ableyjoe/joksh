@@ -99,11 +99,11 @@ fi
 
 cat << EOF >> Makefile
 
-test:
-	echo "No tests"
+test: \${PROG}
+	cd regress/edit && \${MAKE} KSH=../../\${PROG}
 
 clean:
-	rm -f \${PROG} \${OBJS}
+	rm -f \${PROG} \${OBJS} regress/edit/edit
 
 distclean: clean
 	rm -f Makefile pconfig.h *.core

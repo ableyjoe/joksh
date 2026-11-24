@@ -1,5 +1,6 @@
 oksh
-Makefile
+/Makefile
 README
 *.o
 pconfig.h
+regress/edit/edit

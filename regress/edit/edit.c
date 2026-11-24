@@ -26,7 +26,29 @@
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+
+/*
+ * joksh: changed from OpenBSD's version to build where oksh does: the
+ * header for forkpty(), __dead, errc(), strtonum() from oksh's own
+ * compatibility code, and Linux returning EIO where OpenBSD returns end
+ * of file once the shell has exited.
+ */
+#include "pconfig.h"
+#if defined(__linux__)
+#include <pty.h>
+#elif defined(__FreeBSD__) || defined(__DragonFly__)
+#include <libutil.h>
+#else
 #include <util.h>
+#endif
+
+#ifndef __dead
+#define __dead	__attribute__((__noreturn__))
+#endif
+
+#ifndef HAVE_STRTONUM
+long long	strtonum(const char *, long long, long long, const char **);
+#endif
 
 #define	WRTIM	50	/* input write timeout */
 #define	PRTIM	5000	/* prompt read timeout */
@@ -117,14 +139,18 @@ main(int argc, char *argv[])
 			}
 			break;
 		}
-		if (pfd.revents & (POLLERR | POLLNVAL))
-			errc(1, EBADF, NULL);
+		if (pfd.revents & (POLLERR | POLLNVAL)) {
+			errno = EBADF;
+			err(1, NULL);
+		}
 
 		if (pfd.revents & (POLLIN | POLLHUP)) {
 			if (nread == sizeof(out))
 				errx(1, "output buffer too small");
 
 			n = read(ptyfd, out + nread, sizeof(out) - 1 - nread);
+			if (n == -1 && errno == EIO)
+				break;
 			if (n == -1)
 				err(1, "read");
 			nread += n;

@@ -28,7 +28,13 @@ testseq() {
 	exit 1
 }
 
+# joksh: vis(1) and hexdump(1) are not everywhere that oksh builds.
+VIS="vis -ol"
+command -v vis >/dev/null 2>&1 || VIS="cat -v"
+HEXDUMP="hexdump -Cv"
+command -v hexdump >/dev/null 2>&1 || HEXDUMP="od -c"
+
 dump() {
-	printf '%s:\n>>>%s<<<\n' "$1" "$(echo -n "$2" | vis -ol)"
-	echo -n "$2" | hexdump -Cv
+	printf '%s:\n>>>%s<<<\n' "$1" "$(echo -n "$2" | $VIS)"
+	echo -n "$2" | $HEXDUMP
 }
