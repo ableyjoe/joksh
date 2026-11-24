@@ -32,7 +32,6 @@
 
 #undef CTRL
 #define	CTRL(x)		((x) & 0x1F)	/* ASCII */
-#define UTF8_MAXBYTES	4
 
 struct edstate {
 	char	*cbuf;		/* main buffer to build the command line */
@@ -1472,7 +1471,13 @@ calc_winsize(void)
 		pwidth -= prompt_trunc;
 	} else
 		prompt_trunc = 0;
-	newlen = (x_cols - 3) * UTF8_MAXBYTES;
+	/*
+	 * A byte for each column, the UTF-8 continuation bytes after them,
+	 * which take no column, and the blank display() puts after the
+	 * window. Well-formed text has at most three continuation bytes to
+	 * a column, but stray ones can run on for a whole line.
+	 */
+	newlen = x_cols - 3 + LINE + 1;
 	if (!wbuf_len || wbuf_len != newlen) {
 		wbuf_len = newlen;
 		wbuf[0] = aresize(wbuf[0], wbuf_len, APERM);

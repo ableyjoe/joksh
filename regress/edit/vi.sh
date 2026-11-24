@@ -311,3 +311,9 @@ PS1=$(printf '\303\251\342\206\222 ')
 x=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 testseq "$x" "\0303\0251\0342\0206\0222 $x"
 PS1=' # '
+
+# A run of stray UTF-8 continuation bytes, which take no column, still
+# fits in the window buffers.
+c10='\0200\0200\0200\0200\0200\0200\0200\0200\0200\0200'
+c100=$c10$c10$c10$c10$c10$c10$c10$c10$c10$c10
+testseq "a$c100$c100$c100$c100" " # a\ba$c100$c100$c100$c100"
