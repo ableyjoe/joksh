@@ -8,9 +8,12 @@ CC ?=		cc
 KSH ?=		../../oksh
 LIBUTIL ?=	-lutil
 
+# The last run checks that multiline changes nothing on a terminal
+# without what it needs.
 all: edit
 	${KSH} ./emacs.sh . ${KSH}
 	${KSH} ./vi.sh . ${KSH}
+	TERM=dumb KSHFLAGS="-o multiline" ${KSH} ./vi.sh . ${KSH}
 
 # The harness takes strtonum() from oksh's compatibility code when the
 # system has none.

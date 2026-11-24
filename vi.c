@@ -85,6 +85,9 @@ static void	vi_error(void);
 static void	vi_macro_reset(void);
 static int	x_vi_putbuf(const char *, size_t);
 static int	isu8cont(unsigned char);
+#ifndef SMALL
+static int	vi_cells(int, int, char *);
+#endif
 static void	x_vi_resize(void);
 static void	calc_winsize(void);
 
@@ -239,6 +242,10 @@ x_vi(char *buf, size_t len)
 		if (state != VLIT) {
 			if (c == edchars.intr || c == edchars.quit) {
 				/* pretend we got an interrupt */
+#ifndef SMALL
+				if (x_ml_on)
+					x_ml_finish();
+#endif
 				x_vi_zotc(c);
 				x_flush();
 				trapsig(c == edchars.intr ? SIGINT : SIGQUIT);
@@ -246,6 +253,10 @@ x_vi(char *buf, size_t len)
 				unwind(LSHELL);
 			} else if (c == edchars.eof) {
 				if (es->linelen == 0) {
+#ifndef SMALL
+					if (x_ml_on)
+						x_ml_finish();
+#endif
 					x_vi_zotc(edchars.eof);
 					c = -1;
 					break;
@@ -259,6 +270,10 @@ x_vi(char *buf, size_t len)
 	}
 
 	x_resize_cb = NULL;
+#ifndef SMALL
+	if (x_ml_on)
+		x_ml_below();
+#endif
 	x_putc('\r'); x_putc('\n'); x_flush();
 
 	if (c == -1 || len <= (size_t)es->linelen)
@@ -1475,6 +1490,9 @@ edit_reset(char *buf, size_t len)
 	win = 0;
 	morec = ' ';
 	holdlen = 0;
+#ifndef SMALL
+	x_ml_init(vi_cells);
+#endif
 }
 
 static void
@@ -1809,6 +1827,10 @@ redraw_line(int neednl, int full)
 {
 	(void) memset(wbuf[win], ' ', wbuf_len);
 	if (neednl) {
+#ifndef SMALL
+		if (x_ml_on)
+			x_ml_below();
+#endif
 		x_putc('\r');
 		x_putc('\n');
 	}
@@ -1820,6 +1842,13 @@ redraw_line(int neednl, int full)
 static void
 refresh_line(int leftside)
 {
+#ifndef SMALL
+	if (x_ml_on) {
+		if (x_ml_refresh(es->cbuf, es->linelen, es->cursor, leftside))
+			return;
+		redraw_line(1, 0);
+	}
+#endif
 	if (outofwin())
 		rewindow();
 	display(wbuf[1 - win], wbuf[win], leftside);
@@ -2341,6 +2370,13 @@ x_vi_zotc(int c)
 static void
 vi_pprompt(int full)
 {
+#ifndef SMALL
+	if (x_ml_on) {
+		pprompt(prompt + (full ? 0 : prompt_skip), 0);
+		x_ml_start();
+		return;
+	}
+#endif
 	pprompt(prompt + (full ? 0 : prompt_skip), prompt_trunc);
 }
 
@@ -2400,6 +2436,38 @@ vi_u8len(unsigned char c)
 	return 1;
 }
 
+#ifndef SMALL
+/*
+ * For the multi-line display: store how byte c is shown at column col
+ * in cells and return the number of cells. These are display()'s rules
+ * for a line seen from its start, and are to be kept in step with it.
+ */
+static int
+vi_cells(int c, int col, char *cells)
+{
+	int	n = 0;
+
+	if (c == '\t') {
+		n = 8 - (col & 7);
+		memset(cells, ' ', n);
+		return n;
+	}
+	if (isu8cont(c))
+		return 0;
+	if ((c & 0x80) && Flag(FVISHOW8)) {
+		cells[n++] = 'M';
+		cells[n++] = '-';
+		c &= 0x7f;
+	}
+	if (c < ' ' || c == 0x7f) {
+		cells[n++] = '^';
+		cells[n++] = c ^ '@';
+	} else
+		cells[n++] = c;
+	return n;
+}
+#endif
+
 static void
 x_vi_resize(void)
 {
@@ -2407,6 +2475,9 @@ x_vi_resize(void)
 	int cr_done = 0, cleared = 0;
 
 #ifndef SMALL
+	/* The multi-line display goes back to where the prompt begins. */
+	if (x_ml_on)
+		x_ml_top();
 	if (cur_term != NULL) {
 		if (carriage_return != NULL &&
 		    tputs(carriage_return, 1, x_putc) != ERR)

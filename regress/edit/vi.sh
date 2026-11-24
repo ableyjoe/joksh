@@ -341,3 +341,226 @@ testseq "T\0026\0007\0033=" " # T^\b^G\b\a"
 testseq "\0033/abc\0003\0033/\0027a" " # /abc^C\r\n # /a"
 testseq "\0033/abc\0003\0033/\0010a" " # /abc^C\r\n # /\b \b"
 testseq "abc\00332/x\0003" " # abc\b\b\b/  \b\bx^C\r\n # "
+
+# set -o multiline: Long lines continue on the following screen lines.
+# The terminal is 80 columns wide. The xterm terminfo entry has
+# automatic margins, cursor up (\E[A) and clear to end of screen (\E[J).
+TERM=xterm
+export TERM
+KSHFLAGS="-o multiline"
+ED='\0033[J'
+UP='\0033[A'
+
+a76=$(rep 76 a)
+t77="a$ED$a76"		# 77 a typed: clear the screen once, at the start
+
+# Control characters are shown as in a single line.
+testseq "\0026\0001" " # ^$ED\b^A"
+
+# After the last column: A blank and a carriage return, so that the
+# cursor is at the start of the next line on all terminals.
+testseq "${a76}ab" " # $t77 \rb"
+
+# The screen width is not hardcoded: the same wrapping on 20 columns.
+EDITFLAGS="-w 20"
+testseq "$(rep 17 a)ab" " # a$ED$(rep 16 a) \rab"
+EDITFLAGS=
+
+# When the terminal changes width, the line is drawn again from where
+# the prompt begins, or from lower down if the line takes fewer rows at
+# the new width: terminals that wrap it again put it there.
+testseq "${a76}ab\000RS60" " # $t77 \rb\r$UP\r$ED # ${a76}ab$ED"
+testseq "$(rep 100 a)\000RS120" \
+    " # $t77 \r$(rep 23 a)\r\r$ED # $(rep 100 a)$ED"
+
+# Moving to an earlier line: Set the column, then move up.
+testseq "${a76}ab\00330" " # $t77 \rb\bb  $UP"
+
+# Changes are drawn from the first changed character.
+testseq "${a76}ab\00330iX" " # $t77 \rb\bb  ${UP}X${a76}ab  $UP"
+
+# A shorter line clears what is left of the old one.
+testseq "${a76}ab\00330x" " # $t77 \rb\bb  $UP\0033[76Cb \r$ED   $UP"
+
+# Moving to a later line, before an interrupt.
+testseq "${a76}ab\00330\0003" " # $t77 \rb\bb  $UP\r\n\rb^C\r\n # "
+
+# A line that fills its last line is not followed by an empty line.
+testseq "#${a76}\n" " # #$ED$a76 \r$UP\r\r\n # "
+
+# A UTF-8 character and a tab starting at the end of a line. The
+# character is drawn once it is whole, as terminals differ on what to
+# show for part of one.
+testseq "${a76}a\0303\0251b" " # $t77 \r\0303\0251b"
+testseq "$(rep 75 a)\0026\tb" " # a$ED$(rep 74 a)^\b     b"
+
+# A character that may not take one column, such as a combining mark or
+# a wide one, has the line shown in the window, on a new line.
+testseq "ab e\0314\0201c" " # a${ED}b e\r\r\n # ab e\0314\0201c"
+testseq "ab\0344\0270\0255c" " # a${ED}b\r\r\n # ab\0344\0270\0255c"
+testseq "a\0342\0206\0222b" " # a$ED\0342\0206\0222b"
+
+# ^R: Redraw on a new line.
+testseq "${a76}ab\0022" " # $t77 \rb\r\r\n # ${a76}ab$ED"
+
+# History: Lines of different lengths in turn.
+testseq "#${a76}ab\n#x\n\0033kkj" \
+    " # #$ED$a76 \rab\r\r\n # #${ED}x\r\r\n # #x$ED\b\b#${a76}ab $UP#x$ED\b\b"
+
+# The width of the last line of the prompt, after a carriage return.
+PS1="xy$(echo '\r') # "
+testseq "${a76}ab" "xy\r # $t77 \rb"
+
+# A prompt wider than the screen is not truncated.
+PS1="$(rep 85 p) # "
+testseq "ab\00330" "${PS1}a${ED}b\b\b"
+
+# A prompt that fills its line: ^D, and no empty line after a newline.
+PS1="$(rep 77 p) # "
+testseq "\n" "$PS1 \r$UP\r\r\n$PS1 \r"
+testseq "\0004" "$PS1 \r^D\r\r"
+PS1=' # '
+
+# A line taller than the screen continues in the window.
+EDITFLAGS="-l 2"
+testseq "#$(rep 157 a)b" \
+    " # #$ED$a76 \r${a76}aaa\r\r\n # $(rep 37 a)$(rep 38 ' ')<$(rep 39 '\b')ab"
+EDITFLAGS=
+
+# Moving right: The terminal's sequence if it is shorter, else the cells.
+testseq "${a76}ab\0033h" " # $t77 \rb\b\0033[79C$UP"
+# Moving left a long way: Start again from the first column.
+testseq "${a76}a$(rep 40 b)\00330" " # $t77 \r$(rep 40 b)\b\r\0033[3C$UP"
+testseq "$(rep 70 a)\00330" " # a$ED$(rep 69 a)\b\r\0033[3C"
+TERMINFO=$(mktemp -d)
+export TERMINFO
+printf 'xtest|no cursor right,\n\tam, cols#80, lines#24,\n' >$TERMINFO/xtest.src
+printf '\tbel=^G, cr=\\r, cuu1=\\E[A, ed=\\E[J,\n' >>$TERMINFO/xtest.src
+tic $TERMINFO/xtest.src
+TERM=xtest
+testseq "${a76}ab\0033h" " # $t77 \rb\bb$(rep 78 ' ')$UP"
+rm -r $TERMINFO
+unset TERMINFO
+TERM=xterm
+
+# Motions across lines: w, b, $, counts, and back to the first column.
+testseq "$(rep 70 a) bb cc dd ee\00330wwwb" \
+    " # a$ED$(rep 69 a) bb cc  \rdd ee\b\b$UP\0033[71Cbb \r\n\r\0033[77C$UP"
+testseq "${a76}ab\00330\$" " # $t77 \rb\bb  $UP\r\n\r"
+testseq "${a76}ab\0033030l25h" " # $t77 \rb\bb  $UP\0033[30C\r\0033[8C"
+testseq "${a76}abcdef\00334h" " # $t77 \rbcdef\b\r"
+
+# ^L and ^U. (A search cannot be tested here: edit waits for a prompt
+# after the newline that ends it.)
+testseq "${a76}ab\0014" " # $t77 \rb\0033[H\0033[2J # ${a76}ab$ED"
+testseq "${a76}ab\0025" " # $t77 \rb  $UP$ED"
+
+# Deleting at the end. Bytes that are not valid UTF-8, here a character
+# cut short and a stray continuation byte, have the line shown in the
+# window, on a new line.
+testseq "${a76}ab\0033x" " # $t77 \rb\b \r$ED\0033[79C$UP"
+HISTFILE=$(mktemp)
+echo "#\0303X" >$HISTFILE
+testseq "#\0303\0251\0033k" " # #$ED\0303\0251\b\r\r\n # #\0303X\b\b\b"
+rm -f $HISTFILE
+HISTFILE=
+testseq "\0251\0033" " # \r\r\n # \0251\b"
+
+# Characters of more than one cell split between lines.
+testseq "$(rep 75 a)\0026\tb\00330\$" \
+    " # a$ED$(rep 74 a)^\b     b\b$UP\r\n\r   "
+testseq "${a76}\0026\0001b\00330\$" \
+    " # a$ED$(rep 75 a)^ \r\0033[79C$UP^Ab\bb $UP\r\n\rA"
+testseq "\0026\0177" " # ^$ED\b^?"
+testseq "abcde\0026\tf\003304ll" " # a${ED}bcde^\b   f\b\r\0033[3Cabcde  "
+testseq "abc\0026\0001d\003303l" " # a${ED}bc^\b^Ad$(rep 6 '\b')abc^"
+KSHFLAGS="-o multiline -o vi-show8"
+testseq "${a76}\0201b" " # a$ED$(rep 75 a)M-^Ab"
+KSHFLAGS="-o multiline"
+
+# Completion lists are printed below the line.
+mldir=$(mktemp -d /tmp/ml.XXXXXXXX)
+touch $mldir/f1 $mldir/f2
+cl="#$(rep 70 a) $mldir/f"	# the line
+cs="${mldir#/tmp/}/f"		# its last part
+cf='\r\r\nf1  f2  \r\n'		# the list
+testseq "$cl\0005" " # #$ED$(rep 70 a) /tmp/ \r$cs$cf # $cl$ED"
+testseq "$cl\00335\0134" " # #$ED$(rep 70 a) /tmp/ \r$cs\b\0007$cf # $cl$ED\b"
+KSHFLAGS=
+w1=" # #$(rep 70 a) /\r # $(rep 34 a) /t$(rep 38 ' ')<$(rep 39 '\b')mp/$cs"
+w2=" # $(rep 34 a) $mldir/f$(rep 22 ' ')<"
+testseq "$cl\0005" "$w1$cf$w2$(rep 23 '\b')"
+testseq "$cl\00335\0134" "$w1\b\0007$cf$w2$(rep 24 '\b')"
+KSHFLAGS="-o multiline"
+rm -r $mldir
+
+# More prompts: \n and \r, a newline, a tab, and one of no width.
+PS1='xy\n # '
+PROMPT=$(echo 'xy\r\n # ')
+testseq "${a76}ab" "xy\r\n # $t77 \rb"
+PS1='xy\r # '
+PROMPT=$(echo 'xy\r # ')
+testseq "${a76}ab" "xy\r # $t77 \rb"
+PS1=$(echo 'xy\n # ')
+PROMPT=$(echo 'xy\r\n # ')
+testseq "${a76}ab" "xy\r\n # $t77 \rb"
+PS1=$(echo 'x\t# ')
+PROMPT=$PS1
+testseq "$(rep 70 a)ab" "x\t# a$ED$(rep 69 a) \rab"
+PS1="$(echo '\0001\r\0001\0033[0m\0001')"
+PROMPT="$(echo '\0001\0033[0m\0001')"
+testseq "\n" "$PROMPT\r\r\n$PROMPT"
+PS1=$(echo '\\[\0033[0m\\] # ')
+PROMPT=$(echo '\0033[0m # ')
+testseq "${a76}ab" "\0033[0m # $t77 \rb"
+PS1=$(echo '\0001\r\0001\\a\0001 # ')
+PROMPT=$(echo '\0001\0007\0001 # ')
+testseq "${a76}ab" "\0001\0007\0001 # $t77 \rb"
+PS1=' # '
+PROMPT=
+
+# The height of the screen is not known.
+EDITFLAGS="-l 0"
+testseq "#$(rep 157 a)b" " # #$ED$a76 \r$(rep 80 a) \rab"
+EDITFLAGS=
+
+# Without the option, and after turning it off.
+KSHFLAGS=
+testseq "${a76}ab" \
+    " # $(rep 73 a)$(rep 36 '\b')$(rep 38 ' ')<$(rep 39 '\b')aaab"
+testseq "abc\0003" " # abc^C\r\n # "
+testseq "\0004" " # ^D\r\r"
+w3=" # $(rep 73 a)^ >$(rep 41 '\b')^A$(rep 38 ' ')<"
+testseq "$(rep 73 a)\0026\0001\00330" "$w3$(rep 41 '\b')$(rep 38 a)^ >\r # "
+testseq "$(rep 73 a)\0026\0001" "$w3$(rep 39 '\b')"
+KSHFLAGS="-o vi-show8"
+testseq "$(rep 72 a)\0201" \
+    " # $(rep 72 a)\r # $(rep 33 a)M-^A$(rep 38 ' ')<$(rep 39 '\b')"
+KSHFLAGS="-o multiline"
+testseq "set +o multiline\nab" " # s${ED}et +o multiline\r\r\n # ab"
+
+# Terminals without what the option needs: unknown, no automatic margins,
+# no clear to end of screen, and empty cursor up or clear to end of screen.
+TERM=no-such-terminal
+testseq "#ab\ncd" " # #ab\r\r\n # cd"
+TERMINFO=$(mktemp -d)
+export TERMINFO
+c='cols#80, lines#24, bel=^G, cr=\r'
+for e in "xnoam|no am, $c, cuu1=\E[A, ed=\E[J," \
+    "xnoed|no ed, am, $c, cuu1=\E[A," \
+    "xnocuu|empty cuu1, am, $c, cuu1=, ed=\E[J," \
+    "xnoed2|empty ed, am, $c, cuu1=\E[A, ed=,"
+do
+	printf '%s\n' "$e" >$TERMINFO/e.src
+	tic $TERMINFO/e.src
+done
+for TERM in xnoam xnoed xnocuu xnoed2; do
+	testseq "ab" " # ab"
+done
+rm -r $TERMINFO
+unset TERMINFO
+TERM=xterm
+
+# Without the terminal capabilities, long lines are scrolled.
+TERM=dumb
+testseq "ab" " # ab"
