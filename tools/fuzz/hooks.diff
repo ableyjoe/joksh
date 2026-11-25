@@ -1,0 +1,314 @@
+--- a/alloc.c
++++ b/alloc.c
+@@ -11,6 +11,15 @@
+ 
+ #include "sh.h"
+ 
++#if defined(KSH_FUZZ) && defined(__SANITIZE_ADDRESS__)
++#include <sanitizer/asan_interface.h>
++#define LOPEN(l)	ASAN_UNPOISON_MEMORY_REGION((l), sizeof(struct link))
++#define LSHUT(l)	ASAN_POISON_MEMORY_REGION((l), sizeof(struct link))
++#else
++#define LOPEN(l)	do { } while (0)
++#define LSHUT(l)	do { } while (0)
++#endif
++
+ struct link {
+ 	struct link *prev;
+ 	struct link *next;
+@@ -29,6 +38,7 @@
+ 	struct link *l, *l2;
+ 
+ 	for (l = ap->freelist; l != NULL; l = l2) {
++		LOPEN(l);
+ 		l2 = l->next;
+ 		free(l);
+ 	}
+@@ -52,9 +62,13 @@
+ 		internal_errorf("unable to allocate memory");
+ 	l->next = ap->freelist;
+ 	l->prev = NULL;
+-	if (ap->freelist)
++	if (ap->freelist) {
++		LOPEN(ap->freelist);
+ 		ap->freelist->prev = l;
++		LSHUT(ap->freelist);
++	}
+ 	ap->freelist = l;
++	LSHUT(l);
+ 
+ 	return L2P(l);
+ }
+@@ -92,18 +106,25 @@
+ 		internal_errorf("unable to allocate memory");
+ 
+ 	l = P2L(ptr);
++	LOPEN(l);
+ 	lprev = l->prev;
+ 	lnext = l->next;
+ 
+ 	l2 = realloc(l, sizeof(struct link) + size);
+ 	if (l2 == NULL)
+ 		internal_errorf("unable to allocate memory");
+-	if (lprev)
++	if (lprev) {
++		LOPEN(lprev);
+ 		lprev->next = l2;
+-	else
++		LSHUT(lprev);
++	} else
+ 		ap->freelist = l2;
+-	if (lnext)
++	if (lnext) {
++		LOPEN(lnext);
+ 		lnext->prev = l2;
++		LSHUT(lnext);
++	}
++	LSHUT(l2);
+ 
+ 	return L2P(l2);
+ }
+@@ -117,12 +138,18 @@
+ 		return;
+ 
+ 	l = P2L(ptr);
+-	if (l->prev)
++	LOPEN(l);
++	if (l->prev) {
++		LOPEN(l->prev);
+ 		l->prev->next = l->next;
+-	else
++		LSHUT(l->prev);
++	} else
+ 		ap->freelist = l->next;
+-	if (l->next)
++	if (l->next) {
++		LOPEN(l->next);
+ 		l->next->prev = l->prev;
++		LSHUT(l->next);
++	}
+ 
+ 	free(l);
+ }
+--- a/edit.c
++++ b/edit.c
+@@ -32,6 +32,12 @@
+ 
+ #include "sh.h"
+ #include "edit.h"
++
++#ifdef KSH_FUZZ
++static void	x_fuzz_osc(const char *, size_t);
++static int	x_fuzz_enabled(void);
++static void	x_fuzz_hex(char *, const char *, int);
++#endif
+ #include "tty.h"
+ 
+ X_chars edchars;
+@@ -133,6 +139,25 @@
+ 	else
+ #endif
+ 		i = -1;		/* internal error */
++#ifdef KSH_FUZZ
++	x_fuzz_cb = NULL;
++	if (x_fuzz_enabled() && i >= 0) {
++		static char	out[16 + 2 * LINE + 16];
++		int		n, l = i > LINE ? LINE : i;
++
++		x_flush();
++		n = snprintf(out, 16, "\033]777;L ");
++		x_fuzz_hex(out + n, buf, l);
++		n += 2 * l;
++		out[n++] = '\007';
++		x_fuzz_osc(out, n);
++		/* Never run what the fuzzer typed. */
++		if (i > 0) {
++			buf[0] = '\n';
++			i = 1;
++		}
++	}
++#endif
+ 	x_mode(false);
+ 	check_sigwinch();
+ 	return i;
+@@ -140,12 +165,79 @@
+ 
+ /* tty I/O */
+ 
++#ifdef KSH_FUZZ
++void		(*x_fuzz_cb)(void);
++static long	x_fuzz_nread;
++static int	x_fuzz_on = -1;
++
++static void
++x_fuzz_osc(const char *s, size_t n)
++{
++	size_t	off = 0;
++	ssize_t	r;
++
++	while (off < n && (r = write(1, s + off, n - off)) > 0)
++		off += r;
++}
++
++static int
++x_fuzz_enabled(void)
++{
++	if (x_fuzz_on < 0)
++		x_fuzz_on = getenv("KSH_FUZZ") != NULL;
++	return x_fuzz_on;
++}
++
++static void
++x_fuzz_hex(char *o, const char *buf, int len)
++{
++	static const char	hex[] = "0123456789abcdef";
++	int			i;
++
++	for (i = 0; i < len; i++) {
++		*o++ = hex[(unsigned char)buf[i] >> 4];
++		*o++ = hex[(unsigned char)buf[i] & 15];
++	}
++	*o = '\0';
++}
++
++/* Report the editor's state, once its output is all written. */
++void
++x_fuzz_dump(int tag, int extra, const char *buf, int len, int cursor)
++{
++	static char	out[64 + 2 * LINE + 64];
++	int		n;
++
++	if (!x_fuzz_enabled())
++		return;
++	x_flush();
++	if (len < 0 || len > LINE)
++		len = 0;
++	n = snprintf(out, 64, "\033]777;D %c %d %d %d %d %d %ld %d %d ",
++	    tag, extra,
++#ifndef SMALL
++	    x_ml_on, x_ml_held,
++#else
++	    0, 0,
++#endif
++	    x_cols, x_lins, x_fuzz_nread, cursor, len);
++	x_fuzz_hex(out + n, buf, len);
++	n += 2 * len;
++	out[n++] = '\007';
++	x_fuzz_osc(out, n);
++}
++#endif
++
+ int
+ x_getc(void)
+ {
+ 	char c;
+ 	int n;
+ 
++#ifdef KSH_FUZZ
++	if (x_fuzz_cb != NULL)
++		x_fuzz_cb();
++#endif
+ 	while ((n = blocking_read(STDIN_FILENO, &c, 1)) < 0 && errno == EINTR) {
+ 		check_sigwinch();
+ 		if (trap) {
+@@ -156,6 +248,9 @@
+ 	}
+ 	if (n != 1)
+ 		return -1;
++#ifdef KSH_FUZZ
++	x_fuzz_nread++;
++#endif
+ 	return (int) (unsigned char) c;
+ }
+ 
+--- a/edit.h
++++ b/edit.h
+@@ -67,6 +67,11 @@
+ void	x_ml_top(void);
+ void	x_ml_finish(void);
+ #endif
++#ifdef KSH_FUZZ
++/* edit.c: test hooks for the fuzzer */
++extern void (*x_fuzz_cb)(void);
++void	x_fuzz_dump(int, int, const char *, int, int);
++#endif
+ /* emacs.c */
+ int	x_emacs(char *, size_t);
+ void	x_init_emacs(void);
+--- a/emacs.c
++++ b/emacs.c
+@@ -159,6 +159,15 @@
+ static int	emacs_cells(int, int, char *);
+ static void	emacs_refresh(void);
+ #endif
++#ifdef KSH_FUZZ
++static int	emacs_fuzz_main;
++static void
++emacs_fuzz(void)
++{
++	x_fuzz_dump(emacs_fuzz_main ? 'E' : 'e', 0, xbuf, xep - xbuf,
++	    xcp - xbuf);
++}
++#endif
+ 
+ /* proto's for keybindings */
+ static int	x_abort(int);
+@@ -350,10 +359,21 @@
+ 		emacs_refresh();
+ #endif
+ 		x_flush();
++#ifdef KSH_FUZZ
++		x_fuzz_cb = emacs_fuzz;
++		emacs_fuzz_main = 1;
++		at = x_e_getu8(line, at);
++		emacs_fuzz_main = 0;
++		if (at < 0) {
++			x_resize_cb = NULL;
++			return 0;
++		}
++#else
+ 		if ((at = x_e_getu8(line, at)) < 0) {
+ 			x_resize_cb = NULL;
+ 			return 0;
+ 		}
++#endif
+ 
+ 		ntries++;
+ 
+--- a/vi.c
++++ b/vi.c
+@@ -26,6 +26,9 @@
+ # include <ncurses/ncurses.h>
+ #endif
+ #endif
++#ifdef KSH_FUZZ
++static void	vi_fuzz(void);
++#endif
+ 
+ #include "sh.h"
+ #include "edit.h"
+@@ -222,6 +225,9 @@
+ 	vi_reset(buf, len > LINE ? LINE : len);
+ 	vi_pprompt(1);
+ 	x_flush();
++#ifdef KSH_FUZZ
++	x_fuzz_cb = vi_fuzz;
++#endif
+ 	while (1) {
+ 		if (macro.p) {
+ 			c = (unsigned char)*macro.p++;
+@@ -2352,6 +2358,14 @@
+ 	return len;
+ }
+ 
++#ifdef KSH_FUZZ
++static void
++vi_fuzz(void)
++{
++	x_fuzz_dump('V', insert, es->cbuf, es->linelen, es->cursor);
++}
++#endif
++
+ /* Similar to x_zotc(emacs.c), but no tab weirdness */
+ static void
+ x_vi_zotc(int c)
