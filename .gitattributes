@@ -1,0 +1,5 @@
+# Left out of release tarballs, which are for building and testing joksh.
+/.gitattributes	export-ignore
+/AGENTS.md	export-ignore
+/packaging	export-ignore
+/tools		export-ignore

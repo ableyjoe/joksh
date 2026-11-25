@@ -5,3 +5,5 @@ README
 *.o
 pconfig.h
 regress/edit/edit
+/dist/
+/packaging/macports/PortIndex*
