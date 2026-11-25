@@ -85,12 +85,12 @@ Everything else is oksh 7.9 as released. In the order of the commits on
 | Fix emacs and vi mode using the wrong terminal width after a resize | Kirill A. Korinsky | [Kirill's ksh branch](https://github.com/catap/openbsd-src/commits/ksh); not in OpenBSD as of November 2026 |
 | Fix emacs mode's UTF-8 display | Kirill A. Korinsky | as above |
 | Fix vi mode's UTF-8 window display | Kirill A. Korinsky | as above |
-| Don't count newlines and tabs twice in the prompt width | Claude | sent to tech@, November 2026 |
-| Keep the vi cursor inside the line at UTF-8 continuation bytes | Claude | sent to tech@, November 2026 |
-| Count a prompt's width in columns, not bytes | Claude | sent to tech@, November 2026 |
-| Don't let vi `cw` on an empty line read before the line buffer | Claude | sent to tech@, November 2026 |
+| Don't count newlines and tabs twice in the prompt width | Joe Abley | sent to tech@, November 2026 |
+| Keep the vi cursor inside the line at UTF-8 continuation bytes | Joe Abley | sent to tech@, November 2026 |
+| Count a prompt's width in columns, not bytes | Joe Abley | sent to tech@, November 2026 |
+| Don't let vi `cw` on an empty line read before the line buffer | Joe Abley | sent to tech@, November 2026 |
 | Make vi mode's window buffers big enough for stray UTF-8 bytes | Claude | the part of a tech@ fix that Kirill's does not cover |
-| Let emacs `^]` and `^[^]` search for a UTF-8 character | Claude | sent to tech@, November 2026 |
+| Let emacs `^]` and `^[^]` search for a UTF-8 character | Joe Abley | sent to tech@, November 2026 |
 | Clear the emacs mark when a history line replaces the buffer | Claude | not yet offered |
 | Let vi `f`, `F`, `t`, `T` and `r` act on a whole UTF-8 character | Claude | not yet offered |
 | Don't complete a command from a word with a control character, which could run a command | Claude | not yet offered |
