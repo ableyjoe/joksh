@@ -51,7 +51,7 @@
 long long	strtonum(const char *, long long, long long, const char **);
 #endif
 
-#define	WRTIM	50	/* input write timeout */
+#define	WRTIM	50	/* input write timeout, unless -t says otherwise */
 #define	PRTIM	5000	/* prompt read timeout */
 
 static size_t		findprompt(const char *, const char *);
@@ -73,16 +73,22 @@ main(int argc, char *argv[])
 	size_t		 nin, nprompt, nread, nwrite;
 	int		 c, nready, ptyfd, readprompt, ret, status, timeout;
 	int		 pending_resize, pending_cols, pending_quiet, pending_post;
-	int		 cols, lines;
+	int		 cols, lines, wrtim;
 
 	cols = 80;
 	lines = 24;
-	while ((c = getopt(argc, argv, "l:p:w:")) != -1) {
+	wrtim = WRTIM;
+	while ((c = getopt(argc, argv, "l:p:t:w:")) != -1) {
 		switch (c) {
 		case 'l':
 			lines = strtonum(optarg, 0, 1000, &errstr);
 			if (errstr != NULL)
 				errx(1, "lines is %s: %s", errstr, optarg);
+			break;
+		case 't':
+			wrtim = strtonum(optarg, 1, 1000, &errstr);
+			if (errstr != NULL)
+				errx(1, "timeout is %s: %s", errstr, optarg);
 			break;
 		case 'w':
 			cols = strtonum(optarg, 1, 1000, &errstr);
@@ -139,13 +145,13 @@ main(int argc, char *argv[])
 		pfd.fd = ptyfd;
 		if (pending_resize || pending_post) {
 			pfd.events = POLLIN;
-			timeout = WRTIM;
+			timeout = wrtim;
 		} else if (!readprompt && nwrite < nin) {
 			pfd.events = POLLOUT;
-			timeout = WRTIM;
+			timeout = wrtim;
 		} else {
 			pfd.events = POLLIN;
-			timeout = readprompt ? PRTIM : WRTIM;
+			timeout = readprompt ? PRTIM : wrtim;
 		}
 		nready = poll(&pfd, 1, timeout);
 		if (nready == -1) {
@@ -268,7 +274,7 @@ sighandler(int sig)
 static void __dead
 usage(void)
 {
-	fprintf(stderr, "usage: edit [-l lines] [-w cols] "
+	fprintf(stderr, "usage: edit [-l lines] [-t timeout] [-w cols] "
 	    "-p prompt command [args]\n");
 	exit(1);
 }

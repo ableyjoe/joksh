@@ -3,6 +3,10 @@
 # Build the shell first; "make test" at the top of the tree builds it and
 # then runs these. The scripts are run by the shell under test, not by
 # the system's sh, whose echo(1) differs too much between systems.
+#
+# The harness takes the shell to have finished with a test when it has
+# printed nothing for 50ms. On a slow machine, set EDITWAIT to wait longer,
+# in milliseconds, as in "EDITWAIT=200 make test".
 
 CC ?=		cc
 KSH ?=		../../joksh

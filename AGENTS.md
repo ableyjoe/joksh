@@ -40,10 +40,11 @@ Branches and history
   multiline, multiline itself in three steps (the display in edit.c, vi,
   emacs), the name joksh, the README and manual history, then this file,
   the fuzzer and the packaging.
-* `main` is rebased, not merged: onto each new `vendor`, and whenever a
-  commit in the series needs fixing. Fix the commit where it belongs
-  rather than adding a fix on top, and push with
-  `git push --force-with-lease origin main`. Releases are tagged
+* `main` is rebased, not merged, onto each new `vendor`, and pushed with
+  `git push --force-with-lease origin main`. Between those rebases, add
+  fixes as new commits on top, so that clones (Joe has several) pull
+  cleanly and Joe's own commits are left alone; at the next rebase, fold
+  each into the commit where it belongs. Releases are tagged
   (`joksh-1.0`) so that they stay reachable.
 * Interactive rebases have no editor here: give `git rebase -i` a
   `GIT_SEQUENCE_EDITOR` script that turns chosen `pick` lines into `edit`
@@ -147,8 +148,9 @@ The harness has quirks worth knowing:
 * Its output buffer is `BUFSIZ`. Typing thousands of characters fills
   it and the harness spins; load long lines from history too.
 * It decides the shell has finished when no output comes for 50ms, so
-  tests can fail on a heavily loaded machine. Run them alone before
-  believing a failure.
+  tests can fail on a heavily loaded or slow machine. Run them alone
+  before believing a failure. `EDITWAIT=200 make test` (`edit -t 200`)
+  waits 200ms instead; the tests then take about four times as long.
 * OpenBSD runs its own version on OpenBSD; joksh's has been run on
   Linux, and on macOS 15 on Intel and macOS 27 on Apple silicon, where
   it passed with joksh 1.0 under `port test`, in spite of poll(2)'s
