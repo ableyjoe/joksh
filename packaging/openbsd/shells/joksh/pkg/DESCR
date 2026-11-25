@@ -1,0 +1,7 @@
+joksh is oksh, the portable OpenBSD Korn shell, with "set -o multiline",
+which lets the vi and emacs line editors show a long command line on as
+many rows of the screen as it needs, as ksh93 does, instead of in a
+window that scrolls sideways; and with fixes to both editors.
+
+joksh is written by a robot engineering team: Claude, an AI model made
+by Anthropic, managed by Joe Abley.

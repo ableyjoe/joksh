@@ -1,0 +1,2 @@
+@shell bin/joksh
+@man man/man1/joksh.1

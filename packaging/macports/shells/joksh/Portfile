@@ -1,0 +1,39 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+# Not in MacPorts: kept in the joksh repository, and used from a local
+# ports tree. packaging/release.sh sets the version and checksums.
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        ableyjoe joksh 1.0 joksh-
+revision            0
+checksums           rmd160  bd81194e4d18db46c19b4b1ab63b95eb3d3dca05 \
+                    sha256  d325895b2dbb7b90a39dd1dc43253cc586b22e90fd2702021d56c0c6a16f0dd4 \
+                    size    334499
+
+github.tarball_from releases
+
+description         Portable OpenBSD ksh with multi-line editing
+long_description    joksh is oksh, the portable OpenBSD Korn shell, with \
+                    set -o multiline, for editing a long command line on \
+                    as many rows of the screen as it needs in vi and emacs \
+                    mode, and with fixes to both line editors. It is \
+                    written by Claude, an AI model made by Anthropic, \
+                    managed by Joe Abley.
+
+categories          shells
+maintainers         nomaintainer
+license             BSD ISC public-domain
+
+depends_lib         port:ncurses
+
+configure.args      --mandir=${prefix}/share/man
+
+test.run            yes
+test.target         test
+
+notes "
+To make joksh a login shell, add ${prefix}/bin/joksh to /etc/shells, then\
+run: chsh -s ${prefix}/bin/joksh
+"
