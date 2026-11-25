@@ -70,9 +70,10 @@ built on, and `$KSH_VERSION` is as in oksh.
 joksh has been built and tested on Linux, and on macOS 15 on Intel and
 macOS 27 on Apple silicon, where the MacPorts port builds joksh 1.0 and
 passes all its tests. An earlier, vi-only version of the multiline code has
-been in daily use on macOS. joksh is meant for OpenBSD as well, as oksh is;
-it builds there, but its tests have not yet all passed there. Reports from
-OpenBSD and other systems are welcome.
+been in daily use on macOS. On OpenBSD 8.0 on amd64, in a VM, the OpenBSD
+port builds and installs joksh 1.0, and the tests pass once they are given
+longer to wait for the shell (`EDITWAIT=100 make test`). Reports from other
+systems are welcome.
 
 What joksh changes
 ------------------

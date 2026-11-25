@@ -154,12 +154,11 @@ The harness has quirks worth knowing:
 * OpenBSD runs its own version on OpenBSD; joksh's has been run on
   Linux, and on macOS 15 on Intel and macOS 27 on Apple silicon, where
   it passed with joksh 1.0 under `port test`, in spite of poll(2)'s
-  reputation there for not supporting devices. Its first run on OpenBSD
-  (8.0 on amd64, in a VM) failed once, in the `TERM=dumb` multiline
-  pass of emacs.sh, at the test on line 84: nothing came after the
-  prompt. The same test passed in the first pass, and the one before it
-  passed in the same pass, so the 50ms timeout is the first suspect;
-  this is not yet settled.
+  reputation there for not supporting devices. On OpenBSD 8.0 on amd64,
+  in a VM, 50ms is too short: about a third of the passes through
+  emacs.sh failed a test, with or without multiline, with nothing at all
+  after the prompt. With `EDITWAIT=100`, ten passes out of ten and then
+  a whole `make test` passed, so the OpenBSD port sets that.
 
 How multiline works
 -------------------

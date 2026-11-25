@@ -112,6 +112,12 @@ directory, or, on another machine of the same architecture,
 signed, hence `-D unsigned`. pkg_add adds `/usr/local/bin/joksh` to
 `/etc/shells` and pkg_delete takes it out again.
 
+The tests take the shell to have finished with each one when it has been
+quiet for a while; 50ms by default, which is too short on a slow machine
+such as a VM. The port has them wait 100ms instead (`TEST_ENV`), but
+joksh 1.0's tests always wait 50ms, so on a slow machine build 1.0 with
+`-n`.
+
 After changing the port, `make port-lib-depends-check` in its directory
 says whether `WANTLIB` is right, and `make update-plist` whether the
 packing list is.

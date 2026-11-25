@@ -16,4 +16,8 @@ CONFIGURE_STYLE=simple
 CONFIGURE_ARGS=	--prefix=${PREFIX} \
 		--mandir=${PREFIX}/man
 
+# How long the line editing tests wait for the shell, in milliseconds: the
+# harness's own 50 is too short in a VM. Releases after 1.0 look at this.
+TEST_ENV=	EDITWAIT=100
+
 .include <bsd.port.mk>
