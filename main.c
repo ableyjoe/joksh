@@ -315,7 +315,7 @@ main(int argc, char *argv[])
 	/* setstr can't fail here */
 	setstr(global(version_param), ksh_version, KSH_RETURN_ERROR);
 	setstr(global("OKSH_VERSION"), "oksh 7.9", KSH_RETURN_ERROR);
-	setstr(global("JOKSH_VERSION"), "joksh 1.0", KSH_RETURN_ERROR);
+	setstr(global("JOKSH_VERSION"), joksh_version, KSH_RETURN_ERROR);
 #endif /* SMALL */
 
 	/* execute initialization statements */

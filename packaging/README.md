@@ -15,7 +15,7 @@ Versions
 --------
 
 joksh numbers its own releases, from `joksh 1.0`; they do not follow
-oksh's. The version is set in one place, `$JOKSH_VERSION` in `main.c`,
+oksh's. The version is set in one place, `JOKSH` in `version.c`,
 and `$OKSH_VERSION` says which release of oksh a joksh is built on.
 Taking a new oksh release makes a new joksh release. The tag for a
 release is `joksh-` and the version, as in `joksh-1.0`. A version is
@@ -25,7 +25,7 @@ hyphen in one.
 Making a release
 ----------------
 
-1. Set the version in `main.c`, if it is new, commit it, and check that
+1. Set the version in `version.c`, if it is new, commit it, and check that
    `make test` passes on a clean tree.
 2. Run `packaging/release.sh`. It makes `dist/joksh-VERSION.tar.gz` from
    HEAD, leaving out what `.gitattributes` marks `export-ignore`, and

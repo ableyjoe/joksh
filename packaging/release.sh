@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Make the release tarball for the joksh version in main.c from HEAD, as
+# Make the release tarball for the joksh version in version.c from HEAD, as
 # dist/joksh-VERSION.tar.gz, and set the MacPorts and OpenBSD ports to
 # that version and the tarball's size and checksums. See README.md.
 #
@@ -16,9 +16,9 @@ die() {
 top=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 cd "$top"
 
-v=$(sed -n 's/.*"JOKSH_VERSION"), "joksh \([0-9][0-9.]*\)".*/\1/p' main.c)
-[ -n "$v" ] || die "cannot find the version in main.c"
-[ $# -eq 0 ] || [ "$1" = "$v" ] || die "main.c says joksh $v, not $1"
+v=$(sed -n 's/^#define[	 ]*JOKSH[	 ]*"joksh \([0-9][0-9.]*\)".*/\1/p' version.c)
+[ -n "$v" ] || die "cannot find the version in version.c"
+[ $# -eq 0 ] || [ "$1" = "$v" ] || die "version.c says joksh $v, not $1"
 case $v in
 [0-9]*.[0-9]*) ;;
 *) die "version $v is not dotted numbers, as in 1.0" ;;

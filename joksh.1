@@ -1468,7 +1468,10 @@ The name and version of joksh (read-only), as in
 .Ev OKSH_VERSION
 says which release of oksh it is built on.
 .It Ev KSH_VERSION
-The version of the shell and the date the version was created (read-only).
+The version of the shell and the date the version was created, followed by
+.Ev JOKSH_VERSION
+in parentheses (read-only), as in
+.Dq @(#)PD KSH v5.2.14 99/07/13.2 (joksh 1.0) .
 .It Ev LINENO
 The line number of the function or shell script that is currently being
 executed.

@@ -65,7 +65,9 @@ is drawn again, though part of the old one may be left above it. See
 
 `$JOKSH_VERSION` says which joksh you have, such as `joksh 1.0`; joksh
 numbers its own releases. `$OKSH_VERSION` says which release of oksh it is
-built on, and `$KSH_VERSION` is as in oksh.
+built on. `$KSH_VERSION` is pdksh's, as in oksh, with joksh's after it:
+`@(#)PD KSH v5.2.14 99/07/13.2 (joksh 1.0)`, so that scripts which look for
+`PD KSH` still find it.
 
 joksh has been built and tested on Linux, and on macOS 15 on Intel and
 macOS 27 on Apple silicon, where the MacPorts port builds joksh 1.0 and
@@ -129,7 +131,7 @@ $ make test
 A rebase drops a joksh fix that has arrived upstream unchanged; one that
 arrived in another form shows up as a conflict, and the joksh commit should
 then be dropped by hand. Taking a new oksh release makes a new joksh
-release: give it a new `$JOKSH_VERSION` in `main.c`, update the table
+release: give it a new version in `version.c`, update the table
 above, then push `vendor`, push `main` with `--force-with-lease` (it has
 been rebased), and make the release.
 

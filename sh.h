@@ -332,6 +332,7 @@ extern struct coproc coproc;
 extern sigset_t		sm_default, sm_sigchld;
 
 extern const char ksh_version[];
+extern const char joksh_version[];
 
 /* name of called builtin function (used by error functions) */
 extern char	*builtin_argv0;
