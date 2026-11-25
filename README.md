@@ -67,11 +67,11 @@ is drawn again, though part of the old one may be left above it. See
 numbers its own releases. `$OKSH_VERSION` says which release of oksh it is
 built on, and `$KSH_VERSION` is as in oksh.
 
-So far joksh itself has been built and tested on Linux. It is meant for
-OpenBSD and macOS as well, as oksh is, and an earlier, vi-only version of the
-multiline code has been in daily use on macOS. Reports from those and other
-systems are welcome; the tests' pty harness, in particular, has not yet been
-run on macOS.
+joksh has been built and tested on Linux, and on macOS 15 on Intel, where
+the MacPorts port builds joksh 1.0 and passes all its tests. An earlier,
+vi-only version of the multiline code has been in daily use on macOS. joksh
+is meant for OpenBSD as well, as oksh is, but has not yet been built there.
+Reports from OpenBSD and other systems are welcome.
 
 What joksh changes
 ------------------

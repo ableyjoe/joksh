@@ -149,9 +149,10 @@ The harness has quirks worth knowing:
 * It decides the shell has finished when no output comes for 50ms, so
   tests can fail on a heavily loaded machine. Run them alone before
   believing a failure.
-* OpenBSD runs its own version on OpenBSD; joksh's has only been run on
-  Linux so far. On macOS, whose poll(2) is said not to support devices,
-  it is untested.
+* OpenBSD runs its own version on OpenBSD; joksh's has been run on
+  Linux and on macOS 15 on Intel, where it passed with joksh 1.0 under
+  `port test`, in spite of poll(2)'s reputation there for not supporting
+  devices. It has not yet been run on OpenBSD.
 
 How multiline works
 -------------------
@@ -236,6 +237,7 @@ The cloud session runs Linux. It can build and test joksh, run the
 sanitizers and the fuzzer, and reach GitHub with git, but not GitHub's
 archive downloads or OpenBSD's mirrors, so it cannot build either
 package. Joe tests on an OpenBSD amd64 machine and on macOS with a local
-MacPorts ports tree, and has a QEMU harness for other OpenBSD
-architectures; ask him to run what needs those, and give him the
-commands.
+MacPorts ports tree (the port built, installed and passed its tests
+with joksh 1.0, on macOS 15 on Intel), and has a QEMU harness for other
+OpenBSD architectures; ask him to run what needs those, and give him
+the commands.
