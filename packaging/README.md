@@ -71,6 +71,15 @@ and run `portindex` in it after adding or changing a port. To update
 joksh after a new release, copy the Portfile across again, run
 `portindex`, and `sudo port upgrade joksh`.
 
+MacPorts builds as the `macports` user, which has to be able to reach
+the ports tree. If `port install` says it cannot open the Portfile
+("Permission denied"), your home directory is shut to other users; let
+that one user through it, without letting it list what is there:
+
+```
+$ chmod +a "user:macports allow search" ~
+```
+
 To make joksh a login shell, add `/opt/local/bin/joksh` to `/etc/shells`
 and run `chsh -s /opt/local/bin/joksh`.
 

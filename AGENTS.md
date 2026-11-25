@@ -150,9 +150,14 @@ The harness has quirks worth knowing:
   tests can fail on a heavily loaded machine. Run them alone before
   believing a failure.
 * OpenBSD runs its own version on OpenBSD; joksh's has been run on
-  Linux and on macOS 15 on Intel, where it passed with joksh 1.0 under
-  `port test`, in spite of poll(2)'s reputation there for not supporting
-  devices. It has not yet been run on OpenBSD.
+  Linux, and on macOS 15 on Intel and macOS 27 on Apple silicon, where
+  it passed with joksh 1.0 under `port test`, in spite of poll(2)'s
+  reputation there for not supporting devices. Its first run on OpenBSD
+  (8.0 on amd64, in a VM) failed once, in the `TERM=dumb` multiline
+  pass of emacs.sh, at the test on line 84: nothing came after the
+  prompt. The same test passed in the first pass, and the one before it
+  passed in the same pass, so the 50ms timeout is the first suspect;
+  this is not yet settled.
 
 How multiline works
 -------------------
@@ -238,6 +243,6 @@ sanitizers and the fuzzer, and reach GitHub with git, but not GitHub's
 archive downloads or OpenBSD's mirrors, so it cannot build either
 package. Joe tests on an OpenBSD amd64 machine and on macOS with a local
 MacPorts ports tree (the port built, installed and passed its tests
-with joksh 1.0, on macOS 15 on Intel), and has a QEMU harness for other
-OpenBSD architectures; ask him to run what needs those, and give him
-the commands.
+with joksh 1.0, on macOS 15 on Intel and macOS 27 on Apple silicon),
+and has a QEMU harness for other OpenBSD architectures; ask him to run
+what needs those, and give him the commands.
